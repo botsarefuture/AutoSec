@@ -1,6 +1,6 @@
-# Sexurity
+# AutoSec
 
-Sexurity is a Python-based project focused on enhancing security measures. This repository contains implementations and tools designed to improve and safeguard various systems.
+AutoSec is a Python-based project focused on enhancing security measures. This repository contains implementations and tools designed to improve and safeguard various systems.
 
 ## Features
 - **Security Tools**: A suite of tools aimed at identifying and mitigating security risks.
@@ -14,8 +14,8 @@ Sexurity is a Python-based project focused on enhancing security measures. This 
 ### Installation
 Clone the repository:
 ```bash
-git clone https://github.com/botsarefuture/sexurity.git
-cd sexurity
+git clone https://github.com/botsarefuture/autosec.git
+cd AutoSec
 ```
 
 ### Usage
