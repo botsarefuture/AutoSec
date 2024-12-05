@@ -19,6 +19,11 @@ cd AutoSec
 bash install.sh
 ```
 
+Oneline installation:
+```bash
+git clone https://github.com/botsarefuture/autosec.git && cd AutoSec && bash install.sh -y
+```
+
 ### Usage
 Detailed usage instructions will be provided here.
 
