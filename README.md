@@ -16,6 +16,7 @@ Clone the repository:
 ```bash
 git clone https://github.com/botsarefuture/autosec.git
 cd AutoSec
+bash install.sh
 ```
 
 ### Usage

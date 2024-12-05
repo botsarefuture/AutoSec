@@ -27,7 +27,7 @@ import hashlib
 
 logging.basicConfig(level=logging.INFO)
 
-from log_anal.fresh.var import COMMANDS, PROCESSED_IPS
+from var import COMMANDS, PROCESSED_IPS
 from utils import load_processed_hashes, save_processed_hashes, load_welcome
 
 PROCESSED_IPS = load_processed_hashes()

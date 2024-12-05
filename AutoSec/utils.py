@@ -1,6 +1,6 @@
 # Description: Utility functions for the fresh module.
 
-from log_anal.fresh.var import HASH_FILE
+from var import HASH_FILE
 import os
 
 def load_processed_hashes():
