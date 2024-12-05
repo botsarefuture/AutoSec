@@ -15,13 +15,13 @@ AutoSec is a Python-based project focused on enhancing security measures. This r
 Clone the repository:
 ```bash
 git clone https://github.com/botsarefuture/autosec.git
-cd AutoSec
+cd autosec
 bash install.sh
 ```
 
 Oneline installation:
 ```bash
-git clone https://github.com/botsarefuture/autosec.git && cd AutoSec && bash install.sh -y
+git clone https://github.com/botsarefuture/autosec.git && cd autosec && bash install.sh -y
 ```
 
 ### Usage
