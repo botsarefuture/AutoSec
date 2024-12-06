@@ -33,3 +33,20 @@ def save_processed_hashes(hashes):
 def load_welcome():
     with open("welcome.txt") as f:
         return f.read()
+    
+def run_in():
+    """
+    Command to un gzip the auth logs and run them all into the fresh module.
+    """
+
+    # first walk the directory and get all the files
+    for root, dirs, files in os.walk("/var/log/auth.log"):
+        for file in files:
+            if file.endswith(".gz"):
+                # unzip the file
+                temp_file = os.path.join("./temp", file[:-3])  # Remove .gz extension
+                os.system(f"gunzip -c {os.path.join(root, file)} > {temp_file}")
+                os.system(f"python3 index.py -l {temp_file} -a ")
+            elif file.endswith(".log"):
+                # run the file into the fresh module
+                os.system(f"python3 index.py -l {os.path.join(root, file)} -a")

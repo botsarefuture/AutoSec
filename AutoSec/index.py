@@ -18,6 +18,7 @@ import logging
 from config import MAX_FAILED_PER_TYPE, ACTIONS_PER_THREAT_LEVEL_PER_TYPE as ACC_
 from tqdm import tqdm
 
+
 from argparse import ArgumentParser
 from argcomplete import autocomplete
 
@@ -28,7 +29,7 @@ import hashlib
 logging.basicConfig(level=logging.INFO)
 
 from var import COMMANDS, PROCESSED_IPS, PROCESSED_LINES
-from utils import load_processed_hashes, save_processed_hashes, load_welcome
+from utils import load_processed_hashes, save_processed_hashes, load_welcome, run_in as load_in
 
 PROCESSED_LINES = load_processed_hashes()
 WELCOME = load_welcome()
@@ -757,6 +758,10 @@ def initialize_logging(args):
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 
+    if args.load_in:
+        load_in()
+        exit(0)
+    
     global MODE
     MODE = args.mode
 
@@ -799,6 +804,13 @@ def initialize_logging(args):
 def init_args():
     parser = ArgumentParser(description="Authentication Log Analyzer")
     
+    parser.add_argument(
+        "-li", 
+        "--load_in",
+        action="store_true",
+        help="Load in the welcome message and run the commands in the file.",
+        
+    )
     parser.add_argument(
         "-l",
         "--logfile",
