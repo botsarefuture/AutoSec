@@ -29,6 +29,11 @@ else
     sudo apt install iptables cron
 fi
 
+echo "Running the initial loading of the logs..."
+python3 "$CURRENT_PATH/AutoSec/index.py" -li
+
+echo "Setting up the cronjob..."
+
 # Add cronjob to user's crontab
 (crontab -l 2>/dev/null; echo "*/5 * * * * /usr/bin/python3 $CURRENT_PATH/AutoSec/index.py -a") | crontab -
 (crontab -l 2>/dev/null; echo "0 * * * * bash $CURRENT_PATH/update.sh") | crontab -
