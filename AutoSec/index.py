@@ -27,10 +27,10 @@ import hashlib
 
 logging.basicConfig(level=logging.INFO)
 
-from var import COMMANDS, PROCESSED_IPS
+from var import COMMANDS, PROCESSED_IPS, PROCESSED_LINES
 from utils import load_processed_hashes, save_processed_hashes, load_welcome
 
-PROCESSED_IPS = load_processed_hashes()
+PROCESSED_LINES = load_processed_hashes()
 WELCOME = load_welcome()
 
 
@@ -236,7 +236,7 @@ class AuthLogAnalyzer:
                     log_entries.append(log_entry)
                     logging.debug(f"Parsed log entry: {log_entry}")
         logging.info(f"Finished parsing log file: {self._log_file}")
-        save_processed_hashes(PROCESSED_IPS)
+        save_processed_hashes(PROCESSED_LINES)
         return log_entries
 
     def _parse_line(self, line):
@@ -254,10 +254,10 @@ class AuthLogAnalyzer:
             A dictionary representing the log entry, or None if the line could not be parsed.
         """
         line_hash = self._hash_line(line)
-        if line_hash in PROCESSED_IPS:
+        if line_hash in PROCESSED_LINES:
             logging.debug(f"Line already processed: {line.strip()}")
             return None
-        PROCESSED_IPS.append(line_hash)
+        PROCESSED_LINES.append(line_hash)
         patterns = [
             r"(?P<date>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+\+\d{2}:\d{2}) (?P<host>\S+) (?P<service>\S+)(?:\[\d+\])?: (?P<message>.+)",
             r"(?P<date>\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}) (?P<host>\S+) (?P<service>\S+)(?:\[\d+\])?: (?P<message>.+)",
