@@ -686,7 +686,6 @@ def main():
         if item in PROCESSED_IPS:
             continue
 
-        highest_threat_level = ThreatLevel.UNKNOWN
         highest_saction = SuggestedAction(SuggestedAction.NO_ACTION)
 
         for item1, value1 in value["log_types"].items():
@@ -728,8 +727,6 @@ def select_highest_action_from_threat(ACTIONS_PER_THREAT_LEVEL_PER_TYPE, highest
                     ACTIONS_PER_THREAT_LEVEL_PER_TYPE[item1]["duration"],
                 )
 
-    highest_threat_level = update_highest_action(highest_saction, saction, highest_threat_level.copy())
-
     select_highest_action(highest_saction, saction)
 
     highest_saction = (
@@ -738,14 +735,6 @@ def select_highest_action_from_threat(ACTIONS_PER_THREAT_LEVEL_PER_TYPE, highest
     
     return highest_saction
 
-def update_highest_action(highest_saction, saction, current_highest_threat_level):
-    highest_threat_level = (
-                    ThreatLevel.HIGH
-                    if saction > highest_saction
-                    else current_highest_threat_level
-                )
-    
-    return highest_threat_level
 
 def select_highest_action(highest_saction, saction):
     if (
