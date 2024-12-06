@@ -31,6 +31,7 @@ fi
 
 # Add cronjob to user's crontab
 (crontab -l 2>/dev/null; echo "*/5 * * * * /usr/bin/python3 $CURRENT_PATH/AutoSec/index.py -a") | crontab -
+(crontab -l 2>/dev/null; echo "0 * * * * bash $CURRENT_PATH/update.sh") | crontab -
 
 echo "The system is now ready to monitor the system logs."
 echo "The script will run every 5 minutes and alert you if there are any suspicious activities."
