@@ -40,13 +40,13 @@ def run_in():
     """
 
     # first walk the directory and get all the files
-    for root, dirs, files in os.walk("/var/log/auth.log"):
+    for root, dirs, files in os.walk("/var/log/"):
         for file in files:
-            if file.endswith(".gz"):
+            if file.endswith(".gz") and "auth" in file:
                 # unzip the file
                 temp_file = os.path.join("./temp", file[:-3])  # Remove .gz extension
                 os.system(f"gunzip -c {os.path.join(root, file)} > {temp_file}")
                 os.system(f"python3 index.py -l {temp_file} -a ")
-            elif file.endswith(".log"):
+            elif file.endswith(".log") and "auth" in file:
                 # run the file into the fresh module
                 os.system(f"python3 index.py -l {os.path.join(root, file)} -a")
