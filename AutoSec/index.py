@@ -759,6 +759,7 @@ def initialize_logging(args):
         logging.getLogger().setLevel(logging.DEBUG)
 
     if args.load_in:
+        logging.warning("Running the run in. This might take a while. Please do not CTRL+C. ")
         load_in()
         exit(0)
     
