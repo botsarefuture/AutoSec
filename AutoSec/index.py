@@ -28,7 +28,7 @@ import hashlib
 
 logging.basicConfig(level=logging.INFO)
 
-from var import COMMANDS, PROCESSED_IPS, PROCESSED_LINES
+from var import COMMANDS, PROCESSED_IPS, PROCESSED_LINES, SERVER_IP
 from utils import load_processed_hashes, save_processed_hashes, load_welcome, run_in as load_in
 
 PROCESSED_LINES = load_processed_hashes()
@@ -571,7 +571,10 @@ class CentralServerAPI:
             if isinstance(event, LogEntry):
                 event = event.to_dict()
 
-            async with session.post(f"{self.url}/api/report", json=event) as response:
+            data = {
+                'server_ip': SERVER_IP,
+                **event}
+            async with session.post(f"{self.url}/api/report", json=data) as response:
                 response.raise_for_status()
                 return await response.json()
 
