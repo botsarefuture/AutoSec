@@ -236,6 +236,11 @@ class AuthLogAnalyzer:
                 if log_entry:
                     log_entries.append(log_entry)
                     logging.debug(f"Parsed log entry: {log_entry}")
+                    
+                    # Save the hash of the processed line
+                    line_hash = self._hash_line(line)
+                    PROCESSED_LINES.add(line_hash)
+                    
         logging.info(f"Finished parsing log file: {self._log_file}")
         save_processed_hashes(PROCESSED_LINES)
         return log_entries
@@ -581,6 +586,10 @@ class CentralServerAPI:
         except aiohttp.ClientError as e:
             logging.error(f"Failed to report event to central server: {e}")
             if retries == 0:
+                # save the event to a file, so it can be reported later
+                with open("failed_events.log", "a") as file:
+                    file.write(f"{event}\n")
+                
                 logging.error("Max retries exceeded. Aborting.")
                 return None
 
