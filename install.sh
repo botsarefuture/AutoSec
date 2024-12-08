@@ -47,12 +47,12 @@ else
 fi
 
 echo "Running the initial loading of the logs..."
-sudo python3 "$INSTALL_DIR/index.py" -li
+sudo python3 "$INSTALL_DIR/AutoSec/index.py" -li
 
 echo "Setting up the cronjob..."
 
 # Add cronjob to user's crontab
-(crontab -l 2>/dev/null; echo "*/5 * * * * /usr/bin/python3 $INSTALL_DIR/index.py -a") | crontab -
+(crontab -l 2>/dev/null; echo "*/5 * * * * /usr/bin/python3 $INSTALL_DIR/AutoSec/index.py -a") | crontab -
 (crontab -l 2>/dev/null; echo "0 * * * * bash $INSTALL_DIR/update.sh") | crontab -
 
 # Create or overwrite the flag file

@@ -258,7 +258,7 @@ class AuthLogAnalyzer:
         if line_hash in PROCESSED_LINES:
             logging.debug(f"Line already processed: {line.strip()}")
             return None
-        PROCESSED_LINES.append(line_hash)
+
         patterns = [
             r"(?P<date>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+\+\d{2}:\d{2}) (?P<host>\S+) (?P<service>\S+)(?:\[\d+\])?: (?P<message>.+)",
             r"(?P<date>\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}) (?P<host>\S+) (?P<service>\S+)(?:\[\d+\])?: (?P<message>.+)",

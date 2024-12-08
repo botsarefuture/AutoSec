@@ -3,7 +3,7 @@
 from var import HASH_FILE
 import os
 
-CMD = "python3 AutoSec/index.py -l"
+CMD = "python3 /etc/AutoSec/AutoSec/index.py -l"
 
 def load_processed_hashes():
     """
