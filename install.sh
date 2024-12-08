@@ -14,8 +14,12 @@ fi
 # Ensure the install directory exists
 if [ ! -d "$INSTALL_DIR" ]; then
     echo "Creating the installation directory at $INSTALL_DIR..."
-    sudo mkdir -p "$INSTALL_DIR"
-    # Also create install_dir/temp directory
+    sudo mkdir -p "$INSTALL_DIR"  
+fi
+
+# This is to fix the issue with the temp directory not being created
+if [ ! -d "$INSTALL_DIR/temp" ]; then
+    echo "Creating the temp directory at $INSTALL_DIR/temp..."
     sudo mkdir -p "$INSTALL_DIR/temp"
 fi
 
