@@ -46,7 +46,7 @@ def run_in():
                 # unzip the file
                 temp_file = os.path.join("./temp", file[:-3])  # Remove .gz extension
                 os.system(f"gunzip -c {os.path.join(root, file)} > {temp_file}")
-                os.system(f"python3 index.py -l {temp_file} -a ")
+                os.system(f"python3 AutoSec/index.py -l {temp_file} -a ")
             elif file.endswith(".log") and "auth" in file:
                 # run the file into the fresh module
                 os.system(f"python3 index.py -l {os.path.join(root, file)} -a")
