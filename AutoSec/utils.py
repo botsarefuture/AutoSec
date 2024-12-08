@@ -1,5 +1,6 @@
 # Description: Utility functions for the fresh module.
 
+import requests
 from var import HASH_FILE
 import os
 
@@ -58,3 +59,39 @@ def run_in():
             elif file.endswith(".log") and "auth" in file:
                 # Run the file into the fresh module
                 os.system(f"{CMD} {os.path.join(root, file)} -a")
+                
+def fetch_banned_ips():
+    """
+    Fetches the banned IPs from the fresh module.
+    """
+    url = "https://core.security.luova.club/api/blacklist?text=true"
+    url_2 = "https://core.security.luova.club/api/whitelist?text=true"
+    result = requests.get(url)
+    try:
+        result_2 = requests.get(url_2, timeout=10).text
+    except requests.exceptions.Timeout:
+        result_2 = ""   
+    
+    except Exception as e:
+        result_2 = ""     
+    
+    return result.text.strip().split("\n"), result_2.strip().split("\n")
+    
+def build_commands_for_banned_ips(banned_ips, unbanned_ips):
+    """
+    Builds a list of commands to ban the given IPs.
+
+    Parameters
+    ----------
+    banned_ips : list
+        A list of banned IPs.
+
+    Returns
+    -------
+    list
+        A list of commands to ban the given IPs.
+    """
+    return [f"sudo iptables -A INPUT -s {ip} -j DROP" for ip in banned_ips], [f"sudo iptables -D INPUT -s {ip} -j DROP" for ip in unbanned_ips]
+
+def run_car():
+    build_commands_for_banned_ips(**fetch_banned_ips())

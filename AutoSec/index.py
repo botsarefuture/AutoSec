@@ -29,7 +29,7 @@ import hashlib
 logging.basicConfig(level=logging.INFO)
 
 from var import COMMANDS, PROCESSED_IPS, PROCESSED_LINES, SERVER_IP
-from utils import load_processed_hashes, save_processed_hashes, load_welcome, run_in as load_in
+from utils import load_processed_hashes, save_processed_hashes, load_welcome, run_in as load_in, run_car
 
 PROCESSED_LINES = load_processed_hashes()
 WELCOME = load_welcome()
@@ -250,7 +250,7 @@ class AuthLogAnalyzer:
         Parses a single line of the log file.
 
         Parameters
-        ----------
+        ----------ode
         line : str
             A single line from the log file.
 
@@ -648,6 +648,9 @@ def main():
     """
     Main function to start the log analysis.
     """
+    run_car()
+    logging.warning("Banned ips by order from the central server.")
+    logging.info("Read more at: https://core.security.luova.club/")
     
     args = init_args()  # Initialize command-line arguments
 

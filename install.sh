@@ -11,26 +11,20 @@ if [ "$1" == "-y" ]; then
     AUTO_AGREE=true
 fi
 
-# Ensure the install directory exists
-if [ ! -d "$INSTALL_DIR" ]; then
-    echo "Creating the installation directory at $INSTALL_DIR..."
-    sudo mkdir -p "$INSTALL_DIR"  
-fi
 
-# This is to fix the issue with the temp directory not being created
-if [ ! -d "$INSTALL_DIR/temp" ]; then
-    echo "Creating the temp directory at $INSTALL_DIR/temp..."
-    sudo mkdir -p "$INSTALL_DIR/temp"
-    sudo mkdir -p "$INSTALL_DIR/AutoSec/temp"
-fi
 
 # Clone or update the repository
 if [ ! -d "$INSTALL_DIR/.git" ]; then
     echo "Cloning the repository to $INSTALL_DIR..."
     sudo git clone "$REPO_URL" "$INSTALL_DIR"
+    # give permission to the directory and its contents to the current user
+    sudo chown -R $USER:$USER $INSTALL_DIR
 else
     echo "Updating the repository in $INSTALL_DIR..."
     sudo git -C "$INSTALL_DIR" pull
+
+    # give permission to the directory and its contents to the current user
+    sudo chown -R $USER:$USER $INSTALL_DIR
 fi
 
 # Update package list and install Python and pip
@@ -42,9 +36,28 @@ else
     sudo apt install python3 python3-pip
 fi
 
-# Upgrade pip and install required Python packages
-sudo pip3 install --upgrade pip
-sudo python3 -m pip install --break-system-packages -r "$INSTALL_DIR/requirements.txt"
+
+
+# Ensure the install directory exists
+if [ ! -d "$INSTALL_DIR" ]; then
+    echo "Installation failed. The directory $INSTALL_DIR does not exist."
+    exit 1
+fi
+
+# This is to fix the issue with the temp directory not being created
+if [ ! -d "$INSTALL_DIR/temp" ]; then
+    echo "Creating the temp directory at $INSTALL_DIR/temp..."
+    sudo mkdir -p "$INSTALL_DIR/temp"
+    sudo mkdir -p "$INSTALL_DIR/AutoSec/temp"
+fi
+
+# Create a virtual environment and install required Python packages
+sudo apt install -y python3-venv
+python3 -m venv "$INSTALL_DIR/venv"
+source "$INSTALL_DIR/venv/bin/activate"
+pip install --upgrade pip
+pip install -r "$INSTALL_DIR/requirements.txt" --b
+deactivate
 
 # Install iptables and cron
 if [ "$AUTO_AGREE" = true ]; then
@@ -54,12 +67,14 @@ else
 fi
 
 echo "Running the initial loading of the logs..."
+source "$INSTALL_DIR/venv/bin/activate"
 sudo python3 "$INSTALL_DIR/AutoSec/index.py" -li
+deactivate
 
 echo "Setting up the cronjob..."
 
 # Add cronjob to user's crontab
-(crontab -l 2>/dev/null; echo "*/5 * * * * /usr/bin/python3 $INSTALL_DIR/AutoSec/index.py -a") | crontab -
+(crontab -l 2>/dev/null; echo "*/5 * * * * source $INSTALL_DIR/venv/bin/activate && /usr/bin/python3 $INSTALL_DIR/AutoSec/index.py -a") | crontab -
 (crontab -l 2>/dev/null; echo "0 * * * * bash $INSTALL_DIR/update.sh") | crontab -
 
 # Create or overwrite the flag file

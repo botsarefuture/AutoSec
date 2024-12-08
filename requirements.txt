@@ -1,4 +1,4 @@
 argcomplete==3.5.1
-Requests==2.32.3
+requests==2.32.3
 tqdm
 aiohttp
