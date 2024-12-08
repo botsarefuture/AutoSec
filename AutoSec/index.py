@@ -239,7 +239,7 @@ class AuthLogAnalyzer:
                     
                     # Save the hash of the processed line
                     line_hash = self._hash_line(line)
-                    PROCESSED_LINES.add(line_hash)
+                    PROCESSED_LINES.append(line_hash)
                     
         logging.info(f"Finished parsing log file: {self._log_file}")
         save_processed_hashes(PROCESSED_LINES)
