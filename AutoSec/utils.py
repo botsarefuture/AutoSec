@@ -38,17 +38,23 @@ def load_welcome():
     
 def run_in():
     """
-    Command to un gzip the auth logs and run them all into the fresh module.
+    Command to unzip the auth logs and run them all into the fresh module.
     """
+    temp_dir = "/etc/AutoSec/temp"
+    
+    # Create the temp directory if it doesn't exist
+    if not os.path.exists(temp_dir):
+        os.makedirs(temp_dir)
 
-    # first walk the directory and get all the files
+    # Walk the directory and get all the files
     for root, dirs, files in os.walk("/var/log/"):
         for file in files:
             if file.endswith(".gz") and "auth" in file:
-                # unzip the file
-                temp_file = os.path.join("./temp", file[:-3])  # Remove .gz extension
+                # Unzip the file
+                temp_file = os.path.join(temp_dir, file[:-3])  # Remove .gz extension
                 os.system(f"gunzip -c {os.path.join(root, file)} > {temp_file}")
-                os.system(f"{CMD} {temp_file} -a ")
+                os.system(f"{CMD} {temp_file} -a")
+                
             elif file.endswith(".log") and "auth" in file:
-                # run the file into the fresh module
+                # Run the file into the fresh module
                 os.system(f"{CMD} {os.path.join(root, file)} -a")
