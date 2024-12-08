@@ -44,7 +44,7 @@ fi
 
 # Upgrade pip and install required Python packages
 sudo pip3 install --upgrade pip
-sudo pip3 install --break-system-packages -r "$INSTALL_DIR/requirements.txt"
+sudo python3 -m pip install --break-system-packages -r "$INSTALL_DIR/requirements.txt"
 
 # Install iptables and cron
 if [ "$AUTO_AGREE" = true ]; then
