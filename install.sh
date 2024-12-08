@@ -21,6 +21,7 @@ fi
 if [ ! -d "$INSTALL_DIR/temp" ]; then
     echo "Creating the temp directory at $INSTALL_DIR/temp..."
     sudo mkdir -p "$INSTALL_DIR/temp"
+    sudo mkdir -p "$INSTALL_DIR/AutoSec/temp"
 fi
 
 # Clone or update the repository
