@@ -27,7 +27,7 @@ AutoSec is a Python-based project designed to enhance security measures through 
 
 2. **One-liner Installation**:
    ```bash
-   git clone https://github.com/botsarefuture/autosec.git && cd autosec && bash install.sh -y
+   curl -sSL https://raw.githubusercontent.com/botsarefuture/AutoSec/refs/heads/main/install.sh | sudo bash
    ```
 
 ---
