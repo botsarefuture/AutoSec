@@ -2,18 +2,16 @@
 
 # Function to check for updates and pull the latest version from git
 check_for_updates() {
-    """
-    Checks if the local version hash is different from the remote version hash.
-    If different, pulls the latest version from the git repository.
-
-    Parameters
-    ----------
-    None
-
-    Returns
-    -------
-    None
-    """
+    # Checks if the local version hash is different from the remote version hash.
+    # If different, pulls the latest version from the git repository.
+    #
+    # Parameters
+    # ----------
+    # None
+    #
+    # Returns
+    # -------
+    # None
     local repo_url="https://github.com/botsarefuture/AutoSec.git"
     local version_file="version.txt"
     local temp_version_file="/tmp/version.txt"

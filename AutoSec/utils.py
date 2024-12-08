@@ -33,7 +33,7 @@ def save_processed_hashes(hashes):
             file.write(f"{hash}\n")
             
 def load_welcome():
-    with open("welcome.txt") as f:
+    with open("/etc/AutoSec/welcome.txt") as f:
         return f.read()
     
 def run_in():
