@@ -40,7 +40,7 @@ sudo pip3 install --upgrade pip
 sudo pip3 install --break-system-packages -r "$INSTALL_DIR/requirements.txt"
 
 # Install iptables and cron
-if [ "$AUTO_AGREE" = true; then
+if [ "$AUTO_AGREE" = true ]; then
     sudo apt install -y iptables cron
 else
     sudo apt install iptables cron
