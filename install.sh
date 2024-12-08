@@ -1,13 +1,29 @@
 #!/bin/bash
 
-# Define the current path
-CURRENT_PATH=$(dirname "$(realpath "$0")")
-FLAG_FILE="$CURRENT_PATH/.installed_flag"
+# Define constants
+INSTALL_DIR="/etc/AutoSec"
+FLAG_FILE="$INSTALL_DIR/.installed_flag"
+REPO_URL="https://github.com/botsarefuture/AutoSec.git"
 
 # Check for -y flag
 AUTO_AGREE=false
 if [ "$1" == "-y" ]; then
     AUTO_AGREE=true
+fi
+
+# Ensure the install directory exists
+if [ ! -d "$INSTALL_DIR" ]; then
+    echo "Creating the installation directory at $INSTALL_DIR..."
+    sudo mkdir -p "$INSTALL_DIR"
+fi
+
+# Clone or update the repository
+if [ ! -d "$INSTALL_DIR/.git" ]; then
+    echo "Cloning the repository to $INSTALL_DIR..."
+    sudo git clone "$REPO_URL" "$INSTALL_DIR"
+else
+    echo "Updating the repository in $INSTALL_DIR..."
+    sudo git -C "$INSTALL_DIR" pull
 fi
 
 # Update package list and install Python and pip
@@ -21,7 +37,7 @@ fi
 
 # Upgrade pip and install required Python packages
 sudo pip3 install --upgrade pip
-sudo pip3 install -r "$CURRENT_PATH/requirements.txt"
+sudo pip3 install -r "$INSTALL_DIR/requirements.txt"
 
 # Install iptables and cron
 if [ "$AUTO_AGREE" = true ]; then
@@ -31,13 +47,13 @@ else
 fi
 
 echo "Running the initial loading of the logs..."
-python3 "$CURRENT_PATH/AutoSec/index.py" -li
+sudo python3 "$INSTALL_DIR/index.py" -li
 
 echo "Setting up the cronjob..."
 
 # Add cronjob to user's crontab
-(crontab -l 2>/dev/null; echo "*/5 * * * * /usr/bin/python3 $CURRENT_PATH/AutoSec/index.py -a") | crontab -
-(crontab -l 2>/dev/null; echo "0 * * * * bash $CURRENT_PATH/update.sh") | crontab -
+(crontab -l 2>/dev/null; echo "*/5 * * * * /usr/bin/python3 $INSTALL_DIR/index.py -a") | crontab -
+(crontab -l 2>/dev/null; echo "0 * * * * bash $INSTALL_DIR/update.sh") | crontab -
 
 # Create or overwrite the flag file
 echo "Installation completed on $(date)" | sudo tee "$FLAG_FILE"
