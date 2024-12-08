@@ -2,6 +2,7 @@
 
 # Define the current path
 CURRENT_PATH=$(dirname "$(realpath "$0")")
+FLAG_FILE="$CURRENT_PATH/.installed_flag"
 
 # Check for -y flag
 AUTO_AGREE=false
@@ -37,6 +38,9 @@ echo "Setting up the cronjob..."
 # Add cronjob to user's crontab
 (crontab -l 2>/dev/null; echo "*/5 * * * * /usr/bin/python3 $CURRENT_PATH/AutoSec/index.py -a") | crontab -
 (crontab -l 2>/dev/null; echo "0 * * * * bash $CURRENT_PATH/update.sh") | crontab -
+
+# Create or overwrite the flag file
+echo "Installation completed on $(date)" | sudo tee "$FLAG_FILE"
 
 echo "The system is now ready to monitor the system logs."
 echo "The script will run every 5 minutes and alert you if there are any suspicious activities."
