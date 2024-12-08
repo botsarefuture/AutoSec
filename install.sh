@@ -15,6 +15,8 @@ fi
 if [ ! -d "$INSTALL_DIR" ]; then
     echo "Creating the installation directory at $INSTALL_DIR..."
     sudo mkdir -p "$INSTALL_DIR"
+    # Also create install_dir/temp directory
+    sudo mkdir -p "$INSTALL_DIR/temp"
 fi
 
 # Clone or update the repository
