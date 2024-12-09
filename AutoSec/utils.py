@@ -95,3 +95,4 @@ def build_commands_for_banned_ips(banned_ips, unbanned_ips):
 
 def run_car():
     build_commands_for_banned_ips(**fetch_banned_ips())
+    
