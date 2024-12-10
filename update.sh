@@ -23,6 +23,7 @@ check_for_updates() {
             echo "New version available. Updating..."
             if git pull origin main; then
                 echo "Update completed."
+                systemctl restart autosec.service
             else
                 echo "Failed to pull the latest version."
                 exit 1

@@ -15,6 +15,13 @@ fi
 echo "Removing cronjobs..."
 crontab -l | grep -v "$CRONJOB_PATTERN" | crontab -
 
+# Stop and disable the systemd service
+echo "Stopping and disabling the AutoSec systemd service..."
+sudo systemctl stop autosec.service
+sudo systemctl disable autosec.service
+sudo rm /etc/systemd/system/autosec.service
+sudo systemctl daemon-reload
+
 # Remove the installation directory
 echo "Removing the installation directory at $INSTALL_DIR..."
 sudo rm -rf "$INSTALL_DIR"

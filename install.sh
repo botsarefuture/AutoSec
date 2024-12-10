@@ -66,20 +66,37 @@ else
     sudo apt install iptables cron
 fi
 
-echo "Running the initial loading of the logs..."
-source "$INSTALL_DIR/venv/bin/activate"
-sudo python3 "$INSTALL_DIR/AutoSec/index.py" -li
-deactivate
-
-echo "Setting up the cronjob..."
+echo "Setting up the cronjob for updating the repository..."
 
 # Add cronjob to user's crontab
-(crontab -l 2>/dev/null; echo "*/5 * * * * source $INSTALL_DIR/venv/bin/activate && /usr/bin/python3 $INSTALL_DIR/AutoSec/index.py -a") | crontab -
 (crontab -l 2>/dev/null; echo "0 * * * * bash $INSTALL_DIR/update.sh") | crontab -
+
+# Create systemd service file
+SERVICE_FILE="/etc/systemd/system/autosec.service"
+sudo bash -c "cat > $SERVICE_FILE" <<EOL
+[Unit]
+Description=AutoSec Service
+After=network.target
+
+[Service]
+Type=simple
+User=$USER
+WorkingDirectory=$INSTALL_DIR
+ExecStart=/usr/bin/python3 $INSTALL_DIR/AutoSec/index.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOL
+
+# Reload systemd, enable and start the service
+sudo systemctl daemon-reload
+sudo systemctl enable autosec.service
+sudo systemctl start autosec.service
 
 # Create or overwrite the flag file
 echo "Installation completed on $(date)" | sudo tee "$FLAG_FILE"
 
 echo "The system is now ready to monitor the system logs."
-echo "The script will run every 5 minutes and alert you if there are any suspicious activities."
+echo "The script will run as a systemd service and alert you if there are any suspicious activities."
 echo "Please check the logs regularly to ensure the security of your system."
