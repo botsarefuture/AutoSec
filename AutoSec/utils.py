@@ -54,11 +54,11 @@ def run_in():
                 # Unzip the file
                 temp_file = os.path.join(temp_dir, file[:-3])  # Remove .gz extension
                 os.system(f"gunzip -c {os.path.join(root, file)} > {temp_file}")
-                os.system(f"{CMD} {temp_file} -a")
+                os.system(f"{CMD} {temp_file}")
                 
             elif file.endswith(".log") and "auth" in file:
                 # Run the file into the fresh module
-                os.system(f"{CMD} {os.path.join(root, file)} -a")
+                os.system(f"{CMD} {os.path.join(root, file)}")
     
     # Create a flag file to indicate that the logs have been processed
     with open("/etc/AutoSec/processed", "w") as file:
