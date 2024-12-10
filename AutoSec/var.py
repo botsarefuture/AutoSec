@@ -130,7 +130,7 @@ class Mode:
         self.mode = self.fetch_mode()
     
     def _upper(self):
-        return self.mode.upper()
+        return self._as_real_string().upper()
 
 MODE = Mode()
 
@@ -141,13 +141,3 @@ PROCESSED_LINES = []
 
 HASH_FILE = "processed_hashes.txt"
 SERVER_IP = get_ip()
-
-if __name__ == '__main__':
-    print(MODE)
-   
-        
-    print(SERVER_IP)
-    print(COMMANDS)
-    print(PROCESSED_IPS)
-    print(PROCESSED_LINES)
-    print(HASH_FILE)
