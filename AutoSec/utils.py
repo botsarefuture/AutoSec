@@ -59,7 +59,11 @@ def run_in():
             elif file.endswith(".log") and "auth" in file:
                 # Run the file into the fresh module
                 os.system(f"{CMD} {os.path.join(root, file)} -a")
-                
+    
+    # Create a flag file to indicate that the logs have been processed
+    with open("/etc/AutoSec/processed", "w") as file:
+        file.write("done")
+
 def fetch_banned_ips():
     """
     Fetches the banned IPs from the fresh module.
