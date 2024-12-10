@@ -693,8 +693,8 @@ def main():
 
     logging.debug("Done counting requests per IP.")
 
-    MAX_FAILS = MAX_FAILED_PER_TYPE[MODE]
-    ACTIONS_PER_THREAT_LEVEL_PER_TYPE = ACC_[MODE]
+    MAX_FAILS = MAX_FAILED_PER_TYPE[str(MODE)]
+    ACTIONS_PER_THREAT_LEVEL_PER_TYPE = ACC_[str(MODE)]
 
     print("Per IP counter:")
     ii = per_ip_counter.count_requests_per_ip()

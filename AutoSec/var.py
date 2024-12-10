@@ -80,6 +80,31 @@ class Mode:
     def _init_mode(self):
         self.mode = self.fetch_mode()
         
+    def _as_real_string(self):
+        #if type(self.mode) == str:
+        #    self.mode = int(self.mode)
+            
+        if self.mode == 0:
+            return "pink"
+        
+        elif self.mode == 1:
+            return "blue"
+        
+        elif self.mode == 2:
+            return "red"
+        
+        elif self.mode == 3:
+            return "violet"
+        
+        elif self.mode == 4:
+            return "darkred"
+        
+        elif self.mode == 5:
+            return "black"
+        
+        else:
+            return "black"
+        
     def fetch_mode(self):
         """
         Fetches the mode of the fresh module.
@@ -93,7 +118,7 @@ class Mode:
             return 5 # If the request fails, return black mode.
     
     def __str__(self):
-        return str(self.mode)
+        return str(self._as_real_string())
     
     def __repr__(self):
         return self.mode
