@@ -29,7 +29,7 @@ import hashlib
 
 logging.basicConfig(level=logging.INFO)
 
-from var import COMMANDS, PROCESSED_IPS, PROCESSED_LINES, SERVER_IP
+from var import COMMANDS, PROCESSED_IPS, PROCESSED_LINES, SERVER_IP, MODE, Mode
 from utils import load_processed_hashes, save_processed_hashes, load_welcome, run_in as load_in, run_car
 
 PROCESSED_LINES = load_processed_hashes()
@@ -645,28 +645,6 @@ def get_amount_of_threads(args):
         return os.cpu_count()  # Use the maximum number of CPU cores available.
     return args.threads if args.threads else 10  # Default to 10 threads if not specified.
 
-def select_mode():
-    from var import MODE as mode
-    
-    level = {
-        "pink": 0,
-        "blue": 1,
-        "red": 2,
-        "violet": 3,
-        "darkred": 4,
-        "black": 5
-    }
-    
-    # compare MODE and mode
-    if MODE == mode:
-        return mode, False
-    
-    else:
-        if level[MODE] > level[mode]:
-            return MODE, False
-        else:
-            return mode, True
-
 def main():
     """
     Main function to start the log analysis.
@@ -678,24 +656,6 @@ def main():
     args = init_args()  # Initialize command-line arguments
 
     logging_central = initialize_logging(args)
-
-    mode, changed = select_mode()
-    
-    if changed:
-        logging.warning(f"Mode changed to {mode}, by global order from the central server.")
-        # give the user a warning that the mode has changed, and give 10 seconds to cancel the execution
-        logging.warning("The mode has changed. Please review the suggested actions before executing them    ")
-        logging.warning("You have 10 seconds to cancel the execution by pressing CTRL+C.")
-        try:
-            for i in range(10, 0, -1):
-                logging.warning(f"Execution will start in {i} seconds.")
-                time.sleep(1)
-        except KeyboardInterrupt:
-            logging.warning("Execution cancelled.")
-            exit(0)
-    
-    
-
     
     logging.info("Starting log analysis")
     log_analyzer = AuthLogAnalyzer(args.logfile)
@@ -703,7 +663,7 @@ def main():
     logging.info("Parsing log entries")
     log_entries = log_analyzer.parse_log()
 
-    if MODE == "black":
+    if MODE == Mode.BLACK:
         logging.info(
             "Running in black mode. Reporting all events to central monitoring system."
         )
@@ -809,9 +769,6 @@ def initialize_logging(args):
         logging.warning("Running the run in. This might take a while. Please do not CTRL+C. ")
         load_in()
         exit(0)
-    
-    global MODE
-    MODE = args.mode
 
     global SAVE_EMPTY
     SAVE_EMPTY = args.empty_save
@@ -867,14 +824,15 @@ def init_args():
         help="Path to the log file",
     )
 
-    parser.add_argument(
-        "-m",
-        "--mode",
-        type=str,
-        choices=["green", "yellow", "red", "black"],
-        default="green",
-        help="Mode of the system, e.g., 'green', 'yellow', 'red', 'black'\n Only run black mode if you know what you are doing.",
-    )
+    # Remove the mode argument
+    # parser.add_argument(
+    #     "-m",
+    #     "--mode",
+    #     type=str,
+    #     choices=["green", "yellow", "red", "black"],
+    #     default="green",
+    #     help="Mode of the system, e.g., 'green', 'yellow', 'red', 'black'\n Only run black mode if you know what you are doing.",
+    # )
 
     parser.add_argument(
         "--disable-reporting",

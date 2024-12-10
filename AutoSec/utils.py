@@ -94,5 +94,5 @@ def build_commands_for_banned_ips(banned_ips, unbanned_ips):
     return [f"sudo iptables -A INPUT -s {ip} -j DROP" for ip in banned_ips], [f"sudo iptables -D INPUT -s {ip} -j DROP" for ip in unbanned_ips]
 
 def run_car():
-    build_commands_for_banned_ips(**fetch_banned_ips())
+    build_commands_for_banned_ips(*fetch_banned_ips())
     

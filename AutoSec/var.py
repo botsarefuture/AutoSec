@@ -4,14 +4,6 @@ def get_ip():
     result = requests.get("https://checkip.amazonaws.com/")
     return result.text.strip()
 
-def fetch_mode():
-    """
-    Fetches the mode of the fresh module.
-    """
-    url = "https://core.security.luova.club/visualizer/api/alertlevel"
-    result = requests.get(url)
-    
-    return result.json().get("alert_level", 0)
 
 def init_mode(fetch_mode):
     m = fetch_mode()
@@ -33,10 +25,89 @@ def init_mode(fetch_mode):
     
     elif m == 5:
         mode = "black"
+        
+    else:
+        mode = "pink"
 
     return mode
 
-MODE = init_mode(fetch_mode)
+class Mode:
+    """
+    Represents the mode.
+    
+    Attributes
+    ----------
+    mode : int
+        The mode as int:
+            - 0: pink
+            - 1: blue
+            - 2: red
+            - 3: violet
+            - 4: darkred
+            - 5: black
+            
+    Methods
+    -------
+    __str__()
+        Returns the mode as a string.
+    
+    __repr__()
+        Returns the mode as a string.
+        
+    __int__()
+        Returns the mode as an int.
+    
+    _update()
+        Updates the mode.
+        
+    _upper()
+        returns mode with big
+        """
+        
+    PINK = 0
+    BLUE = 1
+    RED = 2
+    VIOLET = 3
+    DARKRED = 4
+    BLACK = 5
+    
+    def __init__(self, mode=None):
+        self.mode = mode
+        
+        if self.mode is None:
+            self._init_mode()
+        
+    def _init_mode(self):
+        self.mode = self.fetch_mode()
+        
+    def fetch_mode(self):
+        """
+        Fetches the mode of the fresh module.
+        """
+        try:
+            url = "https://core.security.luova.club/visualizer/api/alertlevel"
+            result = requests.get(url)
+            resp = int(result.json().get("alert_level", 0))
+            return resp
+        except:
+            return 5 # If the request fails, return black mode.
+    
+    def __str__(self):
+        return str(self.mode)
+    
+    def __repr__(self):
+        return self.mode
+    
+    def __int__(self):
+        return int(self.mode)
+    
+    def _update(self):
+        self.mode = self.fetch_mode()
+    
+    def _upper(self):
+        return self.mode.upper()
+
+MODE = Mode()
 
 COMMANDS = []
 
@@ -46,3 +117,12 @@ PROCESSED_LINES = []
 HASH_FILE = "processed_hashes.txt"
 SERVER_IP = get_ip()
 
+if __name__ == '__main__':
+    print(MODE)
+   
+        
+    print(SERVER_IP)
+    print(COMMANDS)
+    print(PROCESSED_IPS)
+    print(PROCESSED_LINES)
+    print(HASH_FILE)
