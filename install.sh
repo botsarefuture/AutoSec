@@ -90,8 +90,8 @@ echo "Setting up the cronjob for updating the repository..."
 # Remove cronjob for updating the repository if it exists
 (crontab -l 2>/dev/null | grep -v "/etc/AutoSec/update.sh" || true) | crontab -
 
-# Add cronjob to user's crontab
-(crontab -l 2>/dev/null; echo "0 * * * * bash $INSTALL_DIR/install.sh") | crontab -
+# Add cronjob to user's crontab if it doesn't already exist
+(crontab -l 2>/dev/null | grep -q "$INSTALL_DIR/install.sh" || (crontab -l 2>/dev/null; echo "0 * * * * bash $INSTALL_DIR/install.sh")) | crontab -
 
 # Create or overwrite the flag file
 echo "Installation completed on $(date)" | sudo tee "$FLAG_FILE"
