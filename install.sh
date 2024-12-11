@@ -5,11 +5,15 @@ INSTALL_DIR="/etc/AutoSec"
 FLAG_FILE="$INSTALL_DIR/.installed_flag"
 REPO_URL="https://github.com/botsarefuture/AutoSec.git"
 USER="autosec"
+LOG_FILE="/var/log/autosec-install.log"
+
+# Redirect all output to log file
+exec > >(tee -a "$LOG_FILE") 2>&1
 
 # Check for -y flag
-AUTO_AGREE=false
-if [ "$1" == "-y" ]; then
-    AUTO_AGREE=true
+AUTO_AGREE=true
+if [ "$1" == "-d" ]; then
+    AUTO_AGREE=false
 fi
 
 # Function to create user
@@ -38,7 +42,6 @@ setup_python_env() {
     sudo -u "$USER" python3 -m venv "$INSTALL_DIR/venv"
     sudo -u "$USER" bash -c "source $INSTALL_DIR/venv/bin/activate && pip install --upgrade pip && pip install -r $INSTALL_DIR/requirements.txt && deactivate"
 }
-
 # Function to setup systemd service
 setup_systemd_service() {
     SERVICE_FILE="/etc/systemd/system/autosec.service"
@@ -51,7 +54,7 @@ After=network.target
 Type=simple
 User=$USER
 WorkingDirectory=$INSTALL_DIR
-ExecStart=/usr/bin/python3 $INSTALL_DIR/AutoSec/index.py
+ExecStart=$INSTALL_DIR/venv/bin/python $INSTALL_DIR/AutoSec/index.py
 Restart=on-failure
 
 [Install]
