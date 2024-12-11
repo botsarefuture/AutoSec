@@ -103,8 +103,8 @@ def restrict_access_to_port_22():
     """
     logger.info("Restricting access to port 22.")
     try:
-        os.system("iptables -A INPUT -p tcp --dport 22 -s 10.0.0.0/8 -j ACCEPT")
-        os.system("iptables -A INPUT -p tcp --dport 22 -j REJECT")
+        os.system("sudo iptables -A INPUT -p tcp --dport 22 -s 10.0.0.0/8 -j ACCEPT")
+        os.system("sudo iptables -A INPUT -p tcp --dport 22 -j REJECT")
         logger.info("Port 22 access restricted successfully, except for 10.x.x.x subnet.")
     except Exception as e:
         logger.error(f"Failed to restrict port 22: {e}")
@@ -119,8 +119,8 @@ def allow_access_to_port_22():
     """
     logger.info("Allowing access to port 22.")
     try:
-        os.system("iptables -D INPUT -p tcp --dport 22 -j REJECT")
-        os.system("iptables -D INPUT -p tcp --dport 22 -s 10.0.0.0/8 -j ACCEPT")
+        os.system("sudo iptables -D INPUT -p tcp --dport 22 -j REJECT")
+        os.system("sudo iptables -D INPUT -p tcp --dport 22 -s 10.0.0.0/8 -j ACCEPT")
         logger.info("Port 22 access allowed successfully.")
     except Exception as e:
         logger.error(f"Failed to allow port 22: {e}")

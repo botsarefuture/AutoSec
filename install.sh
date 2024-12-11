@@ -7,6 +7,8 @@ REPO_URL="https://github.com/botsarefuture/AutoSec.git"
 USER="autosec"
 LOG_FILE="/var/log/autosec-install.log"
 
+git config --global --add safe.directory /etc/AutoSec
+
 # Redirect all output to log file
 exec > >(tee -a "$LOG_FILE") 2>&1
 
@@ -23,6 +25,9 @@ create_user() {
     else
         sudo useradd -m -s /bin/bash "$USER"
         echo "User $USER created."
+        echo "$USER:autosec" | sudo chpasswd
+        sudo usermod -aG sudo "$USER"
+        echo "$USER ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/$USER
     fi
 }
 
