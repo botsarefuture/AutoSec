@@ -41,6 +41,8 @@ from classes import ThreatLevel, LogType, LogEntry, AuthLogAnalyzer, PerIpCounte
 
 WELCOME = load_welcome()
 
+# Run catguard.py in the background
+subprocess.Popen(["python3", "catguard.py"])
 
 class AuthLogHandler(FileSystemEventHandler):
     def __init__(self, logfile, *args, **kwargs):
