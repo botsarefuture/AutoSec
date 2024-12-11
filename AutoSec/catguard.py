@@ -6,6 +6,7 @@ import os
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("watchthecat")
+logger.addHandler(logging.FileHandler("watchthecat.log"))
 
 def check_internet():
     """
