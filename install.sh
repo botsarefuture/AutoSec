@@ -4,6 +4,7 @@
 INSTALL_DIR="/etc/AutoSec"
 FLAG_FILE="$INSTALL_DIR/.installed_flag"
 REPO_URL="https://github.com/botsarefuture/AutoSec.git"
+USER="autosec"
 
 # Check for -y flag
 AUTO_AGREE=false
@@ -11,24 +12,31 @@ if [ "$1" == "-y" ]; then
     AUTO_AGREE=true
 fi
 
+# Function to create user
+create_user() {
+    if id "$USER" &>/dev/null; then
+        echo "User $USER already exists."
+    else
+        sudo useradd -m -s /bin/bash "$USER"
+        echo "User $USER created."
+    fi
+}
+
 # Function to install dependencies
 install_dependencies() {
     if [ "$AUTO_AGREE" = true ]; then
         sudo apt update -y
-        sudo apt install -y python3 python3-pip python3-venv iptables cron
+        sudo apt install -y python3 python3-pip python3-venv iptables cron git
     else
         sudo apt update
-        sudo apt install python3 python3-pip python3-venv iptables cron
+        sudo apt install python3 python3-pip python3-venv iptables cron git
     fi
 }
 
 # Function to setup virtual environment and install Python packages
 setup_python_env() {
-    python3 -m venv "$INSTALL_DIR/venv"
-    source "$INSTALL_DIR/venv/bin/activate"
-    pip install --upgrade pip
-    pip install -r "$INSTALL_DIR/requirements.txt"
-    deactivate
+    sudo -u "$USER" python3 -m venv "$INSTALL_DIR/venv"
+    sudo -u "$USER" bash -c "source $INSTALL_DIR/venv/bin/activate && pip install --upgrade pip && pip install -r $INSTALL_DIR/requirements.txt && deactivate"
 }
 
 # Function to setup systemd service
@@ -54,6 +62,18 @@ EOL
     sudo systemctl enable autosec.service
     sudo systemctl start autosec.service
 }
+
+# Function to grant log file access
+grant_log_access() {
+    sudo usermod -aG adm "$USER"
+    sudo usermod -aG syslog "$USER"
+}
+
+# Create user
+create_user
+
+# Grant log file access
+grant_log_access
 
 # Clone or update the repository
 if [ ! -d "$INSTALL_DIR/.git" ]; then
@@ -83,6 +103,7 @@ if [ ! -d "$INSTALL_DIR/temp" ]; then
     echo "Creating the temp directory at $INSTALL_DIR/temp..."
     sudo mkdir -p "$INSTALL_DIR/temp"
     sudo mkdir -p "$INSTALL_DIR/AutoSec/temp"
+    sudo chown -R $USER:$USER "$INSTALL_DIR/temp" "$INSTALL_DIR/AutoSec/temp"
 fi
 
 echo "Setting up the cronjob for updating the repository..."
