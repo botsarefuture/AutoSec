@@ -124,6 +124,7 @@ def allow_access_to_port_22():
     try:
         os.system("sudo iptables -D INPUT -p tcp --dport 22 -j REJECT")
         os.system("sudo iptables -D INPUT -p tcp --dport 22 -s 10.0.0.0/8 -j ACCEPT")
+        os.system("sudo iptables -D INPUT -p tcp --dport 22 -j ACCEPT")
         os.system("sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT")
         logger.info("Port 22 access allowed successfully.")
     except Exception as e:
