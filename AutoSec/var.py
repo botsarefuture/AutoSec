@@ -131,6 +131,9 @@ class Mode:
     
     def _upper(self):
         return self._as_real_string().upper()
+    
+    def __eq__(self, value: int):
+        return self.mode == value
 
 MODE = Mode()
 

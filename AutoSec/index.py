@@ -37,7 +37,7 @@ from utils import load_welcome, run_in as load_in, run_car
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-from classes import ThreatLevel, LogType, LogEntry, AuthLogAnalyzer, PerIpCounter, BanAction, SuggestedAction, CentralServerAPI
+from classes import ThreatLevel, AuthLogAnalyzer, PerIpCounter, BanAction, SuggestedAction, CentralServerAPI
 
 WELCOME = load_welcome()
 
@@ -167,6 +167,14 @@ def main():
         logging.debug("If you want to save an empty file, use the --empty-save flag.")
 
     logging.info("Finished log analysis.")
+
+def main_loop():
+    """
+    Main loop to run the log analysis every 5 minutes.
+    """
+    while True:
+        main()
+        time.sleep(300)
 
 def write_commands_to_file(args):
     if len(COMMANDS) == 0:
@@ -305,6 +313,10 @@ if __name__ == "__main__":
     if args.single_run:
         logging.warning("Running in single run mode. This will not start the watchdog.")
         main()
+        
+    elif MODE == 0 or MODE == Mode.PINK:
+        logging.info("Running in manual mode. Running main function every 5 minutes.")
+        main_loop()
         
     else:    
         logging.info("Running in watch mode. Running main function once and starting the watchdog.")
