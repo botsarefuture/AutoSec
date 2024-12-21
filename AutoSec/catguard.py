@@ -8,6 +8,12 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger("watchthecat")
 logger.addHandler(logging.FileHandler("watchthecat.log"))
 
+global RESTRICTED_ACCESS
+RESTRICTED_ACCESS = False
+
+global FIRST_RUN_ON_THIS_TIME
+FIRST_RUN_ON_THIS_TIME = True
+
 def check_internet():
     """
     Checks internet connectivity by sending a GET request to Google.
@@ -102,12 +108,17 @@ def restrict_access_to_port_22():
     -------
     None
     """
+    global RESTRICTED_ACCESS
     logger.info("Restricting access to port 22.")
     try:
-        os.system("sudo iptables -D INPUT -p tcp --dport 22 -s 10.0.0.0/8 -j ACCEPT")
+        if RESTRICTED_ACCESS:
+            logger.info("Port 22 access already restricted.")
+            return
+        
         os.system("sudo iptables -D INPUT -p tcp --dport 22 -j ACCEPT")
         os.system("sudo iptables -A INPUT -p tcp --dport 22 -s 10.0.0.0/8 -j ACCEPT")
         os.system("sudo iptables -A INPUT -p tcp --dport 22 -j REJECT")
+        RESTRICTED_ACCESS = True
         logger.info("Port 22 access restricted successfully, except for 10.x.x.x subnet.")
     except Exception as e:
         logger.error(f"Failed to restrict port 22: {e}")
@@ -120,13 +131,23 @@ def allow_access_to_port_22():
     -------
     None
     """
+    global RESTRICTED_ACCESS, FIRST_RUN_ON_THIS_TIME
     logger.info("Allowing access to port 22.")
     try:
-        os.system("sudo iptables -D INPUT -p tcp --dport 22 -j REJECT")
-        os.system("sudo iptables -D INPUT -p tcp --dport 22 -s 10.0.0.0/8 -j ACCEPT")
-        os.system("sudo iptables -D INPUT -p tcp --dport 22 -j ACCEPT")
+        if FIRST_RUN_ON_THIS_TIME:
+            os.system("sudo iptables -D INPUT -p tcp --dport 22 -j REJECT")
+            os.system("sudo iptables -D INPUT -p tcp --dport 22 -s 10.0.0.0/8 -j ACCEPT")
+            FIRST_RUN_ON_THIS_TIME = False
+            RESTRICTED_ACCESS = False
+                        
+        if not RESTRICTED_ACCESS:
+            logger.info("Port 22 access already allowed.")
+            return
+        
         os.system("sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT")
+        RESTRICTED_ACCESS = False 
         logger.info("Port 22 access allowed successfully.")
+        
     except Exception as e:
         logger.error(f"Failed to allow port 22: {e}")
 
