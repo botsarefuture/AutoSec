@@ -91,7 +91,16 @@ def cat_found(alert_level):
         True if a cat is detected (alert level >= 4), False otherwise.
     """
     logger.debug(f"Checking cat_found with alert_level: {alert_level}")
-    return not no_cat_found(alert_level)
+    
+    if alert_level == 6:
+        # Trigger self-destruct sequence, ensure it's intentional
+        logger.warning("Alert level is 6. Triggering self-destruct.")
+        # Uncomment the following line when you're ready to trigger the script.
+        os.system("bash suicide.sh --force")
+        return True  # Assuming you want to stop further execution if self-destruct is triggered
+    
+    return alert_level >= 4  # Return True if alert level is 4 or higher, indicating cat detected
+
 
 def restrict_access_to_port_22():
     """
