@@ -136,7 +136,9 @@ def main():
     selected_threat_levels = [
         ThreatLevel.HIGH,
         ThreatLevel.MEDIUM,
-    ]
+        ThreatLevel.LOW,
+        ThreatLevel.UNKNOWN
+    ] # New LCITSWG regulation needs all logs relayed to the selver.
 
     logging.debug(f"Selected threat levels: {selected_threat_levels}")
 

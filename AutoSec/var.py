@@ -6,6 +6,8 @@ def get_ip():
     return result.text.strip()
 
 
+
+
 def init_mode(fetch_mode):
     m = fetch_mode()
 

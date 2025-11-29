@@ -7,10 +7,11 @@ import asyncio
 import os
 from var import HASH_FILE, SERVER_IP
 
-from utils import save_processed_hashes, load_processed_hashes
+from utils import save_processed_hashes, load_processed_hashes, VERSION
 
 PROCESSED_LINES = load_processed_hashes()
 
+from dateutil.parser import parse as dt_parse
 
 class ThreatLevel:
     """
@@ -53,28 +54,18 @@ class LogType:
     FAILED_ATTEMPT = "failed_attempt"
     INVALID_USER = "invalid_user"
     SESSION_OPENED = "session_opened"
+
     SESSION_CLOSED = "session_closed"
     SUCCESSFUL_LOGIN = "successful_login"
     UNKNOWN = "unknown"
 
     @staticmethod
     def get_type(message):
-        """
-        Identifies the type of log entry based on the message.
-
-        Parameters
-        ----------
-        message : str
-            The message part of the log entry.
-
-        Returns
-        -------
-        str
-            The type of log entry (e.g., 'failed_attempt', 'session_opened', etc.).
-        """
         if "Failed password" in message:
             return LogType.FAILED_ATTEMPT
         elif "Invalid user" in message:
+            return LogType.INVALID_USER
+        elif "authentication failure" in message:
             return LogType.INVALID_USER
         elif "session opened" in message:
             return LogType.SESSION_OPENED
@@ -84,6 +75,7 @@ class LogType:
             return LogType.SUCCESSFUL_LOGIN
         else:
             return LogType.UNKNOWN
+
 
 
 class LogEntry:
@@ -138,6 +130,7 @@ class LogEntry:
             "ip_address": self._ip_address,
             "log_type": self._log_type,
             "threat_level": self._threat_level,
+            "version": VERSION
         }
 
 
@@ -258,11 +251,7 @@ class AuthLogAnalyzer:
             if match:
                 date_str = match.group("date")
                 try:
-                    if "-" in date_str:
-                        date = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%S.%f%z")
-                    else:
-                        date = datetime.strptime(date_str, "%b %d %H:%M:%S")
-                        date = date.replace(year=datetime.now().year)
+                   date = dt_parse(date_str)
                 except ValueError as e:
                     logging.warning(f"Failed to parse date: {date_str} with error: {e}")
                     continue
@@ -279,6 +268,7 @@ class AuthLogAnalyzer:
                     message,
                     ip_address,
                 )
+                
         logging.warning(f"Failed to parse line: {line.strip()}")
         return None
 

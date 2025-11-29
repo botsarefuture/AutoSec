@@ -41,6 +41,10 @@ def load_welcome():
         return f.read()
 
 
+def load_version():
+    with open("/etc/AutoSec/version.txt") as f:
+        return f.read()
+
 def run_in():
     """
     Command to unzip the auth logs and run them all into the fresh module.
@@ -108,3 +112,5 @@ def build_commands_for_banned_ips(banned_ips, unbanned_ips):
 
 def run_car():
     build_commands_for_banned_ips(*fetch_banned_ips())
+
+VERSION = load_version()
