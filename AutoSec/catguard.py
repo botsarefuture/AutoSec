@@ -1,215 +1,116 @@
-import requests
-import time
+import asyncio
+import aiohttp
 import logging
-import os
+import subprocess
+from datetime import datetime
 
-# Configure logging
+# ----------------- Config -----------------
+SECURE_API = "https://core.security.luova.club/visualizer/api/alertlevel"
+CHECK_INTERVAL_NO_CAT = 5    # seconds
+CHECK_INTERVAL_CAT = 10      # seconds
+ALERT_LEVEL_SELF_DESTRUCT = 6
+
+# ----------------- Logging -----------------
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("watchthecat")
-logger.addHandler(logging.FileHandler("watchthecat.log"))
 
-global RESTRICTED_ACCESS
+# ----------------- State -----------------
 RESTRICTED_ACCESS = False
 
-global FIRST_RUN_ON_THIS_TIME
-FIRST_RUN_ON_THIS_TIME = True
-
-
-def check_internet():
-    """
-    Checks internet connectivity by sending a GET request to Google.
-
-    Returns
-    -------
-    bool
-        True if internet is accessible, False otherwise.
-    """
-    logger.debug("Checking internet connectivity")
+# ----------------- Helpers -----------------
+async def fetch_alert_level(session):
+    """Fetch alert level from SECORE API."""
     try:
-        response = requests.get("https://www.google.com", timeout=5)
-        response.raise_for_status()
-        logger.info("Internet connection is available.")
-        return True
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Internet connectivity check failed: {e}")
-        return False
+        async with session.get(SECURE_API, timeout=5) as resp:
+            resp.raise_for_status()
+            data = await resp.json()
+            level = int(data.get("alert_level", 0))
+            logger.debug(f"Fetched alert level: {level}")
+            return level
+    except Exception as e:
+        logger.warning(f"Failed to fetch alert level: {e}")
+        return None
 
-
-def get_mode():
-    """
-    Fetches the alert level from the SECORE API.
-
-    If the SECORE API is unreachable but internet is available, returns an alert level of 5.
-
-    Returns
-    -------
-    int or None
-        The alert level fetched from the API, or 5 if the server is unreachable and internet is available.
-    """
-    logger.debug("Entering get_mode function")
-    url = "https://core.security.luova.club/visualizer/api/alertlevel"
-    try:
-        logger.debug(f"Sending GET request to {url}")
-        response = requests.get(
-            url, timeout=5
-        )  # Added timeout to avoid hanging requests
-        response.raise_for_status()  # Raise an HTTPError for bad responses
-        json_data = response.json()
-        logger.debug(f"Received response: {json_data}")
-        return int(json_data.get("alert_level", 0))
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Request failed: {e}")
-        if check_internet():
-            logger.warning(
-                "Server is unreachable, but internet is available. Returning alert level 5."
-            )
-            return 5
-    except ValueError as e:
-        logger.error(f"Invalid JSON received: {e}")
-    except (KeyError, TypeError) as e:
-        logger.error(f"Unexpected data format: {e}")
-    logger.debug("Exiting get_mode function with None")
-    return None
-
-
-def no_cat_found(alert_level):
-    """
-    Determines if a cat is not detected based on the alert level.
-
-    Parameters
-    ----------
-    alert_level : int or None
-        The current alert level.
-
-    Returns
-    -------
-    bool
-        True if no cat is detected (alert level < 4 or None), False otherwise.
-    """
-    logger.debug(f"Checking no_cat_found with alert_level: {alert_level}")
-    return alert_level is None or alert_level < 4
-
-
-def cat_found(alert_level):
-    """
-    Determines if a cat is detected based on the alert level.
-
-    Parameters
-    ----------
-    alert_level : int or None
-        The current alert level.
-
-    Returns
-    -------
-    bool
-        True if a cat is detected (alert level >= 4), False otherwise.
-    """
-    logger.debug(f"Checking cat_found with alert_level: {alert_level}")
-    
-    if alert_level == 6:
-        # Trigger self-destruct sequence, ensure it's intentional
-        logger.warning("Alert level is 6. Triggering self-destruct.")
-        # Uncomment the following line when you're ready to trigger the script.
-        os.system("bash suicide.sh --force")
-        return True  # Assuming you want to stop further execution if self-destruct is triggered
-    
-    return alert_level >= 4  # Return True if alert level is 4 or higher, indicating cat detected
-
-
-
-def restrict_access_to_port_22():
-    """
-    Restricts access to port 22 by adding iptables rules:
-    - Rejects all incoming traffic to port 22 except from the 10.x.x.x subnet.
-
-    Returns
-    -------
-    None
-    """
+def restrict_port_22():
     global RESTRICTED_ACCESS
-    logger.info("Restricting access to port 22.")
+    if RESTRICTED_ACCESS:
+        logger.debug("Port 22 already restricted.")
+        return
     try:
-        if RESTRICTED_ACCESS:
-            logger.info("Port 22 access already restricted.")
-            return
-
-        os.system("sudo iptables -D INPUT -p tcp --dport 22 -j ACCEPT")
-        os.system("sudo iptables -A INPUT -p tcp --dport 22 -s 10.0.0.0/8 -j ACCEPT")
-        os.system("sudo iptables -A INPUT -p tcp --dport 22 -j REJECT")
-        RESTRICTED_ACCESS = True
-        logger.info(
-            "Port 22 access restricted successfully, except for 10.x.x.x subnet."
+        logger.info("Restricting access to port 22 (except 10.x.x.x)...")
+        subprocess.run(
+            ["sudo", "iptables", "-D", "INPUT", "-p", "tcp", "--dport", "22", "-j", "ACCEPT"],
+            check=False
         )
+        subprocess.run(
+            ["sudo", "iptables", "-A", "INPUT", "-p", "tcp", "--dport", "22", "-s", "10.0.0.0/8", "-j", "ACCEPT"],
+            check=True
+        )
+        subprocess.run(
+            ["sudo", "iptables", "-A", "INPUT", "-p", "tcp", "--dport", "22", "-j", "REJECT"],
+            check=True
+        )
+        RESTRICTED_ACCESS = True
+        logger.info("Port 22 restricted successfully.")
     except Exception as e:
         logger.error(f"Failed to restrict port 22: {e}")
 
-
-def allow_access_to_port_22():
-    """
-    Allows access to port 22 by removing the iptables rule that rejects incoming traffic.
-
-    Returns
-    -------
-    None
-    """
-    global RESTRICTED_ACCESS, FIRST_RUN_ON_THIS_TIME
-    logger.info("Allowing access to port 22.")
+def allow_port_22():
+    global RESTRICTED_ACCESS
+    if not RESTRICTED_ACCESS:
+        logger.debug("Port 22 already open.")
+        return
     try:
-        if FIRST_RUN_ON_THIS_TIME:
-            os.system("sudo iptables -D INPUT -p tcp --dport 22 -j REJECT")
-            os.system(
-                "sudo iptables -D INPUT -p tcp --dport 22 -s 10.0.0.0/8 -j ACCEPT"
-            )
-            FIRST_RUN_ON_THIS_TIME = False
-            RESTRICTED_ACCESS = False
-
-        if not RESTRICTED_ACCESS:
-            logger.info("Port 22 access already allowed.")
-            return
-
-        os.system("sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT")
+        logger.info("Allowing access to port 22...")
+        subprocess.run(
+            ["sudo", "iptables", "-D", "INPUT", "-p", "tcp", "--dport", "22", "-j", "REJECT"],
+            check=True
+        )
+        subprocess.run(
+            ["sudo", "iptables", "-D", "INPUT", "-p", "tcp", "--dport", "22", "-s", "10.0.0.0/8", "-j", "ACCEPT"],
+            check=True
+        )
+        subprocess.run(
+            ["sudo", "iptables", "-A", "INPUT", "-p", "tcp", "--dport", "22", "-j", "ACCEPT"],
+            check=True
+        )
         RESTRICTED_ACCESS = False
-        logger.info("Port 22 access allowed successfully.")
-
+        logger.info("Port 22 access restored.")
     except Exception as e:
         logger.error(f"Failed to allow port 22: {e}")
 
+def handle_self_destruct():
+    logger.critical("Alert level 6 detected! Triggering self-destruct!")
+    # Uncomment only when intentional
+    # subprocess.run(["bash", "suicide.sh", "--force"], check=True)
 
-def main():
-    """
-    Main function that monitors the SECORE API for alert levels and adjusts security measures accordingly.
-
-    Returns
-    -------
-    None
-    """
-    logger.debug("Starting main loop")
-    suicide_time = False
+# ----------------- Main Loop -----------------
+async def monitor_loop():
     alert_level = 0
+    async with aiohttp.ClientSession() as session:
+        while True:
+            new_level = await fetch_alert_level(session)
+            if new_level is not None:
+                alert_level = new_level
 
-    while not suicide_time:
-        logger.debug("Fetching alert level")
-        alert_level = (
-            get_mode() if (new_alert_level := get_mode()) is not None else alert_level
-        )
-        logger.debug(f"Current alert_level: {alert_level}")
+            if alert_level >= ALERT_LEVEL_SELF_DESTRUCT:
+                handle_self_destruct()
+                break  # Stop the loop if self-destruct triggered
+            elif alert_level >= 4:
+                logger.warning(f"Cat detected! Alert level {alert_level}")
+                restrict_port_22()
+                await asyncio.sleep(CHECK_INTERVAL_CAT)
+            else:
+                logger.info(f"No cat detected. Alert level {alert_level}")
+                allow_port_22()
+                await asyncio.sleep(CHECK_INTERVAL_NO_CAT)
 
-        if no_cat_found(alert_level):
-            logger.info(f"No cat found. Alert level is: {alert_level}")
-            allow_access_to_port_22()
-            time.sleep(5)
-        else:
-            logger.warning(
-                f"Cat detected! Alert level is: {alert_level}. Initiating security measures."
-            )
-            restrict_access_to_port_22()
-            time.sleep(10)
-    logger.debug("Exiting main loop")
-
-
+# ----------------- Entrypoint -----------------
 if __name__ == "__main__":
-    logger.debug("Starting script")
-    main()
-    logger.debug("Script ended")
+    try:
+        asyncio.run(monitor_loop())
+    except KeyboardInterrupt:
+        logger.info("Script stopped manually.")
