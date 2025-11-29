@@ -1,7 +1,7 @@
 |---------------------------------------|
 | ** AUTOMATED SSH PROTECTION SYSTEM ** |
 |                                       |
-|          (C) Verso Vuorenmaa          |
+|         (C) Emilia Vuorenmaa          |
 |                                       |
-|                V2.2.0                 |
+|                V3.0.0                 |
 |---------------------------------------|
