@@ -1,4 +1,3 @@
-
 import unittest
 from unittest.mock import patch, mock_open, MagicMock
 import os
@@ -9,10 +8,11 @@ from utils import (
     load_welcome,
     run_in,
     fetch_banned_ips,
-    build_commands_for_banned_ips
+    build_commands_for_banned_ips,
 )
 
 from var import HASH_FILE
+
 
 class TestUtils(unittest.TestCase):
 
@@ -42,15 +42,21 @@ class TestUtils(unittest.TestCase):
     def test_run_in(self, mock_walk, mock_exists, mock_makedirs, mock_system):
         run_in()
         mock_makedirs.assert_called_once_with("/etc/AutoSec/temp")
-        mock_system.assert_any_call("gunzip -c /var/log/auth.log.gz > /etc/AutoSec/temp/auth.log")
-        mock_system.assert_any_call("python3 /etc/AutoSec/AutoSec/index.py -l /etc/AutoSec/temp/auth.log")
-        mock_system.assert_any_call("python3 /etc/AutoSec/AutoSec/index.py -l /var/log/auth.log")
+        mock_system.assert_any_call(
+            "gunzip -c /var/log/auth.log.gz > /etc/AutoSec/temp/auth.log"
+        )
+        mock_system.assert_any_call(
+            "python3 /etc/AutoSec/AutoSec/index.py -l /etc/AutoSec/temp/auth.log"
+        )
+        mock_system.assert_any_call(
+            "python3 /etc/AutoSec/AutoSec/index.py -l /var/log/auth.log"
+        )
 
     @patch("requests.get")
     def test_fetch_banned_ips(self, mock_get):
         mock_get.side_effect = [
             MagicMock(text="192.168.0.1\n192.168.0.2"),
-            MagicMock(text="192.168.0.3\n192.168.0.4")
+            MagicMock(text="192.168.0.3\n192.168.0.4"),
         ]
         banned_ips, unbanned_ips = fetch_banned_ips()
         self.assertEqual(banned_ips, ["192.168.0.1", "192.168.0.2"])
@@ -59,15 +65,24 @@ class TestUtils(unittest.TestCase):
     def test_build_commands_for_banned_ips(self):
         banned_ips = ["192.168.0.1", "192.168.0.2"]
         unbanned_ips = ["192.168.0.3", "192.168.0.4"]
-        ban_commands, unban_commands = build_commands_for_banned_ips(banned_ips, unbanned_ips)
-        self.assertEqual(ban_commands, [
-            "sudo iptables -A INPUT -s 192.168.0.1 -j DROP",
-            "sudo iptables -A INPUT -s 192.168.0.2 -j DROP"
-        ])
-        self.assertEqual(unban_commands, [
-            "sudo iptables -D INPUT -s 192.168.0.3 -j DROP",
-            "sudo iptables -D INPUT -s 192.168.0.4 -j DROP"
-        ])
+        ban_commands, unban_commands = build_commands_for_banned_ips(
+            banned_ips, unbanned_ips
+        )
+        self.assertEqual(
+            ban_commands,
+            [
+                "sudo iptables -A INPUT -s 192.168.0.1 -j DROP",
+                "sudo iptables -A INPUT -s 192.168.0.2 -j DROP",
+            ],
+        )
+        self.assertEqual(
+            unban_commands,
+            [
+                "sudo iptables -D INPUT -s 192.168.0.3 -j DROP",
+                "sudo iptables -D INPUT -s 192.168.0.4 -j DROP",
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

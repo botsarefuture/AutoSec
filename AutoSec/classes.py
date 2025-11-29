@@ -85,6 +85,7 @@ class LogType:
         else:
             return LogType.UNKNOWN
 
+
 class LogEntry:
     """
     Represents a log entry.
@@ -217,13 +218,13 @@ class AuthLogAnalyzer:
                 if log_entry:
                     log_entries.append(log_entry)
                     logging.debug(f"Parsed log entry: {log_entry}")
-                    
+
                     # Save the hash of the processed line
                     line_hash = self._hash_line(line)
                     PROCESSED_LINES.append(line_hash)
-                    
+
             self._last_position = file.tell()
-                    
+
         logging.info(f"Finished parsing log file: {self._log_file}")
         save_processed_hashes(PROCESSED_LINES)
         return log_entries
@@ -559,9 +560,7 @@ class CentralServerAPI:
             if isinstance(event, LogEntry):
                 event = event.to_dict()
 
-            data = {
-                'server_ip': SERVER_IP,
-                **event}
+            data = {"server_ip": SERVER_IP, **event}
             async with session.post(f"{self.url}/api/report", json=data) as response:
                 response.raise_for_status()
                 return await response.json()
@@ -572,7 +571,7 @@ class CentralServerAPI:
                 # save the event to a file, so it can be reported later
                 with open("failed_events.log", "a") as file:
                     file.write(f"{event}\n")
-                
+
                 logging.error("Max retries exceeded. Aborting.")
                 return None
 

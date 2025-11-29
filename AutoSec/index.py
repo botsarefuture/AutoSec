@@ -37,12 +37,20 @@ from utils import load_welcome, run_in as load_in, run_car
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-from classes import ThreatLevel, AuthLogAnalyzer, PerIpCounter, BanAction, SuggestedAction, CentralServerAPI
+from classes import (
+    ThreatLevel,
+    AuthLogAnalyzer,
+    PerIpCounter,
+    BanAction,
+    SuggestedAction,
+    CentralServerAPI,
+)
 
 WELCOME = load_welcome()
 
 # Run catguard.py in the background
 subprocess.Popen(["python3", "/etc/AutoSec/AutoSec/catguard.py"])
+
 
 class AuthLogHandler(FileSystemEventHandler):
     def __init__(self, logfile, *args, **kwargs):
@@ -67,6 +75,7 @@ def watch_logfile(logfile):
         observer.stop()
     observer.join()
 
+
 async def report_events_async(events, logging_central, max_workers=10):
     """
     Reports events to the central monitoring system using asynchronous requests.
@@ -85,9 +94,7 @@ async def report_events_async(events, logging_central, max_workers=10):
     None
     """
     async with aiohttp.ClientSession() as session:
-        tasks = [
-            logging_central.report_event(event, session) for event in events
-        ]
+        tasks = [logging_central.report_event(event, session) for event in events]
         for future in tqdm(
             asyncio.as_completed(tasks),
             total=len(tasks),
@@ -96,6 +103,7 @@ async def report_events_async(events, logging_central, max_workers=10):
         ):
             await future
 
+
 def main():
     """
     Main function to start the log analysis.
@@ -103,11 +111,11 @@ def main():
     run_car()
     logging.warning("Banned ips by order from the central server.")
     logging.info("Read more at: https://core.security.luova.club/")
-        
+
     args = init_args()  # Initialize command-line arguments
 
     logging_central = initialize_logging(args)
-    
+
     logging.info("Starting log analysis")
     log_analyzer = AuthLogAnalyzer(args.logfile)
 
@@ -118,7 +126,11 @@ def main():
         logging.info(
             "Running in black mode. Reporting all events to central monitoring system."
         )
-        asyncio.run(report_events_async(log_entries, logging_central, get_amount_of_threads(args)))
+        asyncio.run(
+            report_events_async(
+                log_entries, logging_central, get_amount_of_threads(args)
+            )
+        )
         logging.debug("All events reported to central monitoring system.")
 
     selected_threat_levels = [
@@ -135,7 +147,11 @@ def main():
     logging.debug("Done filtering log entries.")
 
     logging.info("Reporting filtered events to central monitoring system.")
-    asyncio.run(report_events_async(filtered_entries, logging_central, get_amount_of_threads(args)))
+    asyncio.run(
+        report_events_async(
+            filtered_entries, logging_central, get_amount_of_threads(args)
+        )
+    )
     logging.debug("Filtered events reported to central monitoring system.")
 
     logging.debug("Counting requests per IP")
@@ -155,7 +171,9 @@ def main():
 
         for item1, value1 in value["log_types"].items():
             if value1 > MAX_FAILS[item1]:
-                highest_saction = select_highest_action_from_threat(ACTIONS_PER_THREAT_LEVEL_PER_TYPE, highest_saction, item1)
+                highest_saction = select_highest_action_from_threat(
+                    ACTIONS_PER_THREAT_LEVEL_PER_TYPE, highest_saction, item1
+                )
 
         COMMANDS.append(highest_saction.build_command(item))
         PROCESSED_IPS.append(item)
@@ -168,6 +186,7 @@ def main():
 
     logging.info("Finished log analysis.")
 
+
 def main_loop():
     """
     Main loop to run the log analysis every 5 minutes.
@@ -176,14 +195,14 @@ def main_loop():
         main()
         time.sleep(300)
 
+
 def write_commands_to_file(args):
     if len(COMMANDS) == 0:
         logging.warning("No commands to write.")
         return
-    
+
     logging.info(f"Writing {len(COMMANDS)} commands to 'commands.sh' file.")
 
-    
     with open("commands.sh", "w") as file:
         for command in COMMANDS:
             file.write(f"{command}\n")
@@ -192,60 +211,70 @@ def write_commands_to_file(args):
         logging.info("Executing commands from 'commands.sh' file.")
         subprocess.run(["bash", "commands.sh"])
 
-def select_highest_action_from_threat(ACTIONS_PER_THREAT_LEVEL_PER_TYPE, highest_saction, item1):
+
+def select_highest_action_from_threat(
+    ACTIONS_PER_THREAT_LEVEL_PER_TYPE, highest_saction, item1
+):
     saction = SuggestedAction(
-                    ACTIONS_PER_THREAT_LEVEL_PER_TYPE[item1]["action"],
-                    ACTIONS_PER_THREAT_LEVEL_PER_TYPE[item1]["duration"],
-                )
+        ACTIONS_PER_THREAT_LEVEL_PER_TYPE[item1]["action"],
+        ACTIONS_PER_THREAT_LEVEL_PER_TYPE[item1]["duration"],
+    )
 
     select_highest_action(highest_saction, saction)
 
-    highest_saction = (
-                    saction if saction > highest_saction else highest_saction
-                )
-    
+    highest_saction = saction if saction > highest_saction else highest_saction
+
     return highest_saction
 
 
 def select_highest_action(highest_saction, saction):
     if (
-                    saction._action == highest_saction._action
-                ):  # if the action is the same, choose the one with the highest duration
+        saction._action == highest_saction._action
+    ):  # if the action is the same, choose the one with the highest duration
         if (
-                        saction._duration > highest_saction._duration
-                    ):  # if the duration is higher, choose the new action
+            saction._duration > highest_saction._duration
+        ):  # if the duration is higher, choose the new action
             highest_saction = saction
+
 
 def initialize_logging(args):
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
-    
-    if os.path.exists("/etc/AutoSec/processed") != True and args.logfile == "/var/log/auth.log": # If using custom log file, do not run the run in.
-        logging.warning("Running the run in. This might take a while. Please do not CTRL+C. ")
+
+    if (
+        os.path.exists("/etc/AutoSec/processed") != True
+        and args.logfile == "/var/log/auth.log"
+    ):  # If using custom log file, do not run the run in.
+        logging.warning(
+            "Running the run in. This might take a while. Please do not CTRL+C. "
+        )
         load_in()
 
-    elif os.path.exists("/etc/AutoSec/processed") == True and args.logfile == "/var/log/auth.log":
+    elif (
+        os.path.exists("/etc/AutoSec/processed") == True
+        and args.logfile == "/var/log/auth.log"
+    ):
         logging.debug("Run in has already been run. Skipping.")
-        
+
     elif args.logfile != "/var/log/auth.log":
         logging.debug("Custom log file specified. Skipping run in.")
 
-    
     if os.path.exists("/etc/AutoSec/commands.sh") != True:
         logging.debug("Creating commands.sh file.")
         with open("/etc/AutoSec/commands.sh", "w") as file:
             file.write("#!/bin/bash\n")
             file.write("# AutoSec commands\n")
-            file.write("# This file contains the commands to execute based on the log analysis.\n")
+            file.write(
+                "# This file contains the commands to execute based on the log analysis.\n"
+            )
             file.write("# Do not edit this file manually.\n")
             file.write("\n")
-        
-    
+
     logging.info("Reporting to central monitoring system is enabled.")
     logging_central = CentralServerAPI()
 
-          
     return logging_central
+
 
 def get_amount_of_threads(args):
     """
@@ -263,9 +292,10 @@ def get_amount_of_threads(args):
     """
     return args.threads if args.manual_threads else os.cpu_count()
 
+
 def init_args():
     parser = ArgumentParser(description="Authentication Log Analyzer")
-    
+
     parser.add_argument(
         "-l",
         "--logfile",
@@ -274,52 +304,56 @@ def init_args():
         help="Path to the log file",
     )
 
-
     parser.add_argument(
         "-da",
         "--disable-autoexec",
         action="store_false",
         help="Disable automatically executing the commands after writing them to the file.",
     )
-    
+
     parser.add_argument(
         "--manual-threads",
         action="store_true",
         help="Manually specify the number of threads to use for reporting events.",
-        
     )
-    
+
     parser.add_argument(
         "-t",
         "--threads",
         type=int,
         default=10,
-        help="Number of threads to use for reporting events (default is 10)."
+        help="Number of threads to use for reporting events (default is 10).",
     )
-    
-    parser.add_argument("--single-run", action="store_true", help="Run the main function once and exit.")
-    
-    
-    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output.")
-    
+
+    parser.add_argument(
+        "--single-run", action="store_true", help="Run the main function once and exit."
+    )
+
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="Enable verbose output."
+    )
+
     autocomplete(parser)
 
     args = parser.parse_args()
     return args
 
+
 if __name__ == "__main__":
     args = init_args()
-    
+
     if args.single_run:
         logging.warning("Running in single run mode. This will not start the watchdog.")
         main()
-        
+
     elif MODE == 0 or MODE == Mode.PINK:
         logging.info("Running in manual mode. Running main function every 5 minutes.")
         main_loop()
-        
-    else:    
-        logging.info("Running in watch mode. Running main function once and starting the watchdog.")
+
+    else:
+        logging.info(
+            "Running in watch mode. Running main function once and starting the watchdog."
+        )
         main()
         logging.info("Main function ran once. Starting the watchdog.")
         initialize_logging(args)

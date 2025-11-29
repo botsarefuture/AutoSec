@@ -6,6 +6,7 @@ import os
 
 CMD = "python3 /etc/AutoSec/AutoSec/index.py -l"
 
+
 def load_processed_hashes():
     """
     Loads processed hashes from a file.
@@ -20,6 +21,7 @@ def load_processed_hashes():
             return [line.strip() for line in file]
     return []
 
+
 def save_processed_hashes(hashes):
     """
     Saves processed hashes to a file.
@@ -32,17 +34,19 @@ def save_processed_hashes(hashes):
     with open(HASH_FILE, "w") as file:
         for hash in hashes:
             file.write(f"{hash}\n")
-            
+
+
 def load_welcome():
     with open("/etc/AutoSec/welcome.txt") as f:
         return f.read()
-    
+
+
 def run_in():
     """
     Command to unzip the auth logs and run them all into the fresh module.
     """
     temp_dir = "/etc/AutoSec/temp"
-    
+
     # Create the temp directory if it doesn't exist
     if not os.path.exists(temp_dir):
         os.makedirs(temp_dir)
@@ -55,14 +59,15 @@ def run_in():
                 temp_file = os.path.join(temp_dir, file[:-3])  # Remove .gz extension
                 os.system(f"gunzip -c {os.path.join(root, file)} > {temp_file}")
                 os.system(f"{CMD} {temp_file}")
-                
+
             elif file.endswith(".log") and "auth" in file:
                 # Run the file into the fresh module
                 os.system(f"{CMD} {os.path.join(root, file)}")
-    
+
     # Create a flag file to indicate that the logs have been processed
     with open("/etc/AutoSec/processed", "w") as file:
         file.write("done")
+
 
 def fetch_banned_ips():
     """
@@ -74,13 +79,14 @@ def fetch_banned_ips():
     try:
         result_2 = requests.get(url_2, timeout=10).text
     except requests.exceptions.Timeout:
-        result_2 = ""   
-    
+        result_2 = ""
+
     except Exception as e:
-        result_2 = ""     
-    
+        result_2 = ""
+
     return result.text.strip().split("\n"), result_2.strip().split("\n")
-    
+
+
 def build_commands_for_banned_ips(banned_ips, unbanned_ips):
     """
     Builds a list of commands to ban the given IPs.
@@ -95,8 +101,10 @@ def build_commands_for_banned_ips(banned_ips, unbanned_ips):
     list
         A list of commands to ban the given IPs.
     """
-    return [f"sudo iptables -A INPUT -s {ip} -j DROP" for ip in banned_ips], [f"sudo iptables -D INPUT -s {ip} -j DROP" for ip in unbanned_ips]
+    return [f"sudo iptables -A INPUT -s {ip} -j DROP" for ip in banned_ips], [
+        f"sudo iptables -D INPUT -s {ip} -j DROP" for ip in unbanned_ips
+    ]
+
 
 def run_car():
     build_commands_for_banned_ips(*fetch_banned_ips())
-    

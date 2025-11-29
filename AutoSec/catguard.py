@@ -4,7 +4,9 @@ import logging
 import os
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger("watchthecat")
 logger.addHandler(logging.FileHandler("watchthecat.log"))
 
@@ -13,6 +15,7 @@ RESTRICTED_ACCESS = False
 
 global FIRST_RUN_ON_THIS_TIME
 FIRST_RUN_ON_THIS_TIME = True
+
 
 def check_internet():
     """
@@ -33,6 +36,7 @@ def check_internet():
         logger.error(f"Internet connectivity check failed: {e}")
         return False
 
+
 def get_mode():
     """
     Fetches the alert level from the SECORE API.
@@ -48,15 +52,19 @@ def get_mode():
     url = "https://core.security.luova.club/visualizer/api/alertlevel"
     try:
         logger.debug(f"Sending GET request to {url}")
-        response = requests.get(url, timeout=5)  # Added timeout to avoid hanging requests
+        response = requests.get(
+            url, timeout=5
+        )  # Added timeout to avoid hanging requests
         response.raise_for_status()  # Raise an HTTPError for bad responses
         json_data = response.json()
         logger.debug(f"Received response: {json_data}")
-        return int(json_data.get('alert_level', 0))
+        return int(json_data.get("alert_level", 0))
     except requests.exceptions.RequestException as e:
         logger.error(f"Request failed: {e}")
         if check_internet():
-            logger.warning("Server is unreachable, but internet is available. Returning alert level 5.")
+            logger.warning(
+                "Server is unreachable, but internet is available. Returning alert level 5."
+            )
             return 5
     except ValueError as e:
         logger.error(f"Invalid JSON received: {e}")
@@ -64,6 +72,7 @@ def get_mode():
         logger.error(f"Unexpected data format: {e}")
     logger.debug("Exiting get_mode function with None")
     return None
+
 
 def no_cat_found(alert_level):
     """
@@ -82,6 +91,7 @@ def no_cat_found(alert_level):
     logger.debug(f"Checking no_cat_found with alert_level: {alert_level}")
     return alert_level is None or alert_level < 4
 
+
 def cat_found(alert_level):
     """
     Determines if a cat is detected based on the alert level.
@@ -99,6 +109,7 @@ def cat_found(alert_level):
     logger.debug(f"Checking cat_found with alert_level: {alert_level}")
     return not no_cat_found(alert_level)
 
+
 def restrict_access_to_port_22():
     """
     Restricts access to port 22 by adding iptables rules:
@@ -114,14 +125,17 @@ def restrict_access_to_port_22():
         if RESTRICTED_ACCESS:
             logger.info("Port 22 access already restricted.")
             return
-        
+
         os.system("sudo iptables -D INPUT -p tcp --dport 22 -j ACCEPT")
         os.system("sudo iptables -A INPUT -p tcp --dport 22 -s 10.0.0.0/8 -j ACCEPT")
         os.system("sudo iptables -A INPUT -p tcp --dport 22 -j REJECT")
         RESTRICTED_ACCESS = True
-        logger.info("Port 22 access restricted successfully, except for 10.x.x.x subnet.")
+        logger.info(
+            "Port 22 access restricted successfully, except for 10.x.x.x subnet."
+        )
     except Exception as e:
         logger.error(f"Failed to restrict port 22: {e}")
+
 
 def allow_access_to_port_22():
     """
@@ -136,20 +150,23 @@ def allow_access_to_port_22():
     try:
         if FIRST_RUN_ON_THIS_TIME:
             os.system("sudo iptables -D INPUT -p tcp --dport 22 -j REJECT")
-            os.system("sudo iptables -D INPUT -p tcp --dport 22 -s 10.0.0.0/8 -j ACCEPT")
+            os.system(
+                "sudo iptables -D INPUT -p tcp --dport 22 -s 10.0.0.0/8 -j ACCEPT"
+            )
             FIRST_RUN_ON_THIS_TIME = False
             RESTRICTED_ACCESS = False
-                        
+
         if not RESTRICTED_ACCESS:
             logger.info("Port 22 access already allowed.")
             return
-        
+
         os.system("sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT")
-        RESTRICTED_ACCESS = False 
+        RESTRICTED_ACCESS = False
         logger.info("Port 22 access allowed successfully.")
-        
+
     except Exception as e:
         logger.error(f"Failed to allow port 22: {e}")
+
 
 def main():
     """
@@ -165,7 +182,9 @@ def main():
 
     while not suicide_time:
         logger.debug("Fetching alert level")
-        alert_level = get_mode() if (new_alert_level := get_mode()) is not None else alert_level
+        alert_level = (
+            get_mode() if (new_alert_level := get_mode()) is not None else alert_level
+        )
         logger.debug(f"Current alert_level: {alert_level}")
 
         if no_cat_found(alert_level):
@@ -173,10 +192,13 @@ def main():
             allow_access_to_port_22()
             time.sleep(5)
         else:
-            logger.warning(f"Cat detected! Alert level is: {alert_level}. Initiating security measures.")
+            logger.warning(
+                f"Cat detected! Alert level is: {alert_level}. Initiating security measures."
+            )
             restrict_access_to_port_22()
             time.sleep(10)
     logger.debug("Exiting main loop")
+
 
 if __name__ == "__main__":
     logger.debug("Starting script")
