@@ -12,7 +12,7 @@ ALERT_LEVEL_SELF_DESTRUCT = 6
 
 # ----------------- Logging -----------------
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("watchthecat")
