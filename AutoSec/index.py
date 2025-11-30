@@ -122,7 +122,7 @@ def main():
     logging.info("Parsing log entries")
     log_entries = log_analyzer.parse_log()
 
-    if MODE == Mode.BLACK:
+    if MODE == Mode.BLACK or MODE == Mode.DARKRED:
         logging.info(
             "Running in black mode. Reporting all events to central monitoring system."
         )
@@ -195,7 +195,7 @@ def main_loop():
     """
     while True:
         main()
-        time.sleep(300)
+        time.sleep(30) # we want closer to real time stuff
 
 
 def write_commands_to_file(args):
