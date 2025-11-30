@@ -33,6 +33,7 @@ logging.basicConfig(level=logging.INFO)
 
 from var import COMMANDS, PROCESSED_IPS, SERVER_IP, MODE, Mode
 from utils import load_welcome, run_in as load_in, run_car
+import sys
 
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -48,25 +49,25 @@ from classes import (
 
 WELCOME = load_welcome()
 
-# Run catguard.py in the background
-subprocess.Popen(["python3", "/etc/AutoSec/AutoSec/catguard.py"])
+# Use the current Python interpreter (venv or system)
+python_executable = sys.executable
 
+subprocess.Popen([python_executable, "/etc/AutoSec/AutoSec/catguard.py"])
 
 class AuthLogHandler(FileSystemEventHandler):
-    def __init__(self, logfile, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, logfile):
+        super().__init__()
         self.logfile = logfile
 
     def on_modified(self, event):
         if event.src_path == self.logfile:
-            logging.info(f"{self.logfile} has been modified. Running log analysis.")
-            main()
-
+            logging.info(f"{self.logfile} modified! Running analysis...")
+            main()  # call your main function
 
 def watch_logfile(logfile):
     event_handler = AuthLogHandler(logfile)
     observer = Observer()
-    observer.schedule(event_handler, path=logfile, recursive=False)
+    observer.schedule(event_handler, path=os.path.dirname(logfile), recursive=False)
     observer.start()
     try:
         while True:
@@ -195,7 +196,7 @@ def main_loop():
     """
     while True:
         main()
-        time.sleep(30) # we want closer to real time stuff
+        time.sleep(300) # we want closer to real time stuff
 
 
 def write_commands_to_file(args):
