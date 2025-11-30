@@ -15,6 +15,7 @@ import re
 from datetime import datetime
 import logging
 import subprocess
+import threading
 
 
 from config import MAX_FAILED_PER_TYPE, ACTIONS_PER_THREAT_LEVEL_PER_TYPE as ACC_
@@ -105,11 +106,27 @@ async def report_events_async(events, logging_central, max_workers=10):
             await future
 
 
+def run_car_hourly():
+    """Runs run_car() every hour in a loop."""
+    while True:
+        try:
+            run_car()
+            logging.warning("Banned IPs updated from the central server.")
+            logging.info("Read more at: https://core.security.luova.club/")
+        except Exception as e:
+            logging.error(f"Error running run_car: {e}")
+        time.sleep(3600)  # 1 hour
+
+
+
 def main():
     """
     Main function to start the log analysis.
     """
-    run_car()
+    # Start the thread
+    thread = threading.Thread(target=run_car_hourly, daemon=True)
+    thread.start()
+
     logging.warning("Banned ips by order from the central server.")
     logging.info("Read more at: https://core.security.luova.club/")
 

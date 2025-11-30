@@ -72,45 +72,60 @@ def run_in():
     with open("/etc/AutoSec/processed", "w") as file:
         file.write("done")
 
+import subprocess
+import logging
+import requests
 
 def fetch_banned_ips():
     """
-    Fetches the banned IPs from the fresh module.
+    Fetches the banned IPs from the central blacklist.
+    Returns (banned_ips, unbanned_ips)
     """
     url = "https://core.security.luova.club/api/blacklist?text=true"
-    url_2 = "https://core.security.luova.club/api/whitelist?text=true"
-    result = requests.get(url)
-    try:
-        result_2 = requests.get(url_2, timeout=10).text
-    except requests.exceptions.Timeout:
-        result_2 = ""
+    result = requests.get(url, timeout=10)
 
-    except Exception as e:
-        result_2 = ""
-
-    return result.text.strip().split("\n"), result_2.strip().split("\n")
+    banned = {ip.strip() for ip in result.text.split("\n") if ip.strip()}
+    return list(banned), []  # Whitelist not in use yet
 
 
-def build_commands_for_banned_ips(banned_ips, unbanned_ips):
-    """
-    Builds a list of commands to ban the given IPs.
-
-    Parameters
-    ----------
-    banned_ips : list
-        A list of banned IPs.
-
-    Returns
-    -------
-    list
-        A list of commands to ban the given IPs.
-    """
-    return [f"sudo iptables -A INPUT -s {ip} -j DROP" for ip in banned_ips], [
-        f"sudo iptables -D INPUT -s {ip} -j DROP" for ip in unbanned_ips
-    ]
+def iptables_rule_exists(ip):
+    """Check if a DROP rule already exists for an IP/CIDR."""
+    cmd = f"sudo iptables -C INPUT -s {ip} -j DROP"
+    result = subprocess.run(cmd, shell=True,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL)
+    return result.returncode == 0
 
 
 def run_car():
-    build_commands_for_banned_ips(*fetch_banned_ips())
+    """
+    Fetch, compare, and apply iptables bans safely.
+    """
+    try:
+        banned_ips, unbanned_ips = fetch_banned_ips()
+
+        # Deduplicate automatically since we used a set
+        banned_ips = list(set(banned_ips))
+        unbanned_ips = list(set(unbanned_ips))
+
+        # --- UNBAN FIRST ---
+        for ip in unbanned_ips:
+            if iptables_rule_exists(ip):
+                cmd = f"sudo iptables -D INPUT -s {ip} -j DROP"
+                subprocess.run(cmd, shell=True)
+                logging.info(f"[car] Unbanned {ip}")
+
+        # --- BAN ---
+        for ip in banned_ips:
+            if not iptables_rule_exists(ip):
+                cmd = f"sudo iptables -A INPUT -s {ip} -j DROP"
+                subprocess.run(cmd, shell=True)
+                logging.info(f"[car] Banned {ip}")
+
+        logging.info("[car] Ban sync complete.")
+
+    except Exception as exc:
+        logging.error(f"[car] Failed: {exc}")
+
 
 VERSION = load_version()
