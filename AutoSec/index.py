@@ -262,7 +262,10 @@ def _update_last_ran():
 def initialize_logging(args):
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
-
+        
+    else:
+        logging.getLogger().setLevel(logging.WARNING)
+        
     last_ran = _load_last_ran()
     run_in_needed = False
 
