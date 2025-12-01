@@ -2,12 +2,14 @@ import asyncio
 import aiohttp
 import logging
 import subprocess
+import atexit
+import signal
 from datetime import datetime
 
 # ----------------- Config -----------------
 SECURE_API = "https://core.security.luova.club/visualizer/api/alertlevel"
-CHECK_INTERVAL_NO_CAT = 5    # seconds
-CHECK_INTERVAL_CAT = 10      # seconds
+CHECK_INTERVAL_NO_CAT = 5
+CHECK_INTERVAL_CAT = 10
 ALERT_LEVEL_SELF_DESTRUCT = 6
 
 # ----------------- Logging -----------------
@@ -20,93 +22,144 @@ logger = logging.getLogger("watchthecat")
 # ----------------- State -----------------
 RESTRICTED_ACCESS = False
 
-# ----------------- Helpers -----------------
-async def fetch_alert_level(session):
-    """Fetch alert level from SECORE API."""
+# ----------------- IPTABLES HELPERS -----------------
+def run_cmd(cmd, ignore_errors=False):
+    """Run a system command safely."""
     try:
-        async with session.get(SECURE_API, timeout=5) as resp:
-            resp.raise_for_status()
-            data = await resp.json()
-            level = int(data.get("alert_level", 0))
-            logger.debug(f"Fetched alert level: {level}")
-            return level
+        subprocess.run(cmd, check=not ignore_errors)
     except Exception as e:
-        logger.warning(f"Failed to fetch alert level: {e}")
-        return None
+        if not ignore_errors:
+            logger.error(f"Command failed: {cmd} -> {e}")
+
+def restore_baseline():
+    """Restore safe baseline firewall rules."""
+    global RESTRICTED_ACCESS
+
+    logger.warning("Restoring baseline iptables rules...")
+
+    # Remove all special rules (ignore errors)
+    run_cmd(["sudo", "iptables", "-D", "INPUT", "-p", "tcp", "--dport", "22", "-j", "REJECT"], ignore_errors=True)
+    run_cmd(["sudo", "iptables", "-D", "INPUT", "-p", "tcp", "--dport", "22", "-s", "10.0.0.0/8", "-j", "ACCEPT"], ignore_errors=True)
+
+    # Ensure one and only one SSH allow rule exists
+    run_cmd(["sudo", "iptables", "-D", "INPUT", "-p", "tcp", "--dport", "22", "-j", "ACCEPT"], ignore_errors=True)
+    run_cmd(["sudo", "iptables", "-A", "INPUT", "-p", "tcp", "--dport", "22", "-j", "ACCEPT"], ignore_errors=False)
+
+    RESTRICTED_ACCESS = False
+    logger.warning("Baseline firewall restored.")
 
 def restrict_port_22():
     global RESTRICTED_ACCESS
     if RESTRICTED_ACCESS:
-        logger.debug("Port 22 already restricted.")
         return
-    try:
-        logger.info("Restricting access to port 22 (except 10.x.x.x)...")
-        subprocess.run(
-            ["sudo", "iptables", "-D", "INPUT", "-p", "tcp", "--dport", "22", "-j", "ACCEPT"],
-            check=False
-        )
-        subprocess.run(
-            ["sudo", "iptables", "-A", "INPUT", "-p", "tcp", "--dport", "22", "-s", "10.0.0.0/8", "-j", "ACCEPT"],
-            check=True
-        )
-        subprocess.run(
-            ["sudo", "iptables", "-A", "INPUT", "-p", "tcp", "--dport", "22", "-j", "REJECT"],
-            check=True
-        )
-        RESTRICTED_ACCESS = True
-        logger.info("Port 22 restricted successfully.")
-    except Exception as e:
-        logger.error(f"Failed to restrict port 22: {e}")
+
+    logger.info("Restricting SSH access to 10.x.x.x only...")
+
+    # Clean existing rules first
+    restore_baseline()
+
+    # Add restricted mode rules
+    run_cmd(["sudo", "iptables", "-D", "INPUT", "-p", "tcp", "--dport", "22", "-j", "ACCEPT"], ignore_errors=True)
+    run_cmd(["sudo", "iptables", "-A", "INPUT", "-p", "tcp", "--dport", "22", "-s", "10.0.0.0/8", "-j", "ACCEPT"])
+    run_cmd(["sudo", "iptables", "-A", "INPUT", "-p", "tcp", "--dport", "22", "-j", "REJECT"])
+
+    RESTRICTED_ACCESS = True
+    logger.info("SSH now restricted.")
 
 def allow_port_22():
-    global RESTRICTED_ACCESS
     if not RESTRICTED_ACCESS:
-        logger.debug("Port 22 already open.")
         return
-    try:
-        logger.info("Allowing access to port 22...")
-        subprocess.run(
-            ["sudo", "iptables", "-D", "INPUT", "-p", "tcp", "--dport", "22", "-j", "REJECT"],
-            check=True
-        )
-        subprocess.run(
-            ["sudo", "iptables", "-D", "INPUT", "-p", "tcp", "--dport", "22", "-s", "10.0.0.0/8", "-j", "ACCEPT"],
-            check=True
-        )
-        subprocess.run(
-            ["sudo", "iptables", "-A", "INPUT", "-p", "tcp", "--dport", "22", "-j", "ACCEPT"],
-            check=True
-        )
-        RESTRICTED_ACCESS = False
-        logger.info("Port 22 access restored.")
-    except Exception as e:
-        logger.error(f"Failed to allow port 22: {e}")
+
+    logger.info("Returning SSH to open mode...")
+    restore_baseline()
 
 def handle_self_destruct():
     logger.critical("Alert level 6 detected! Triggering self-destruct!")
-    # Uncomment only when intentional
     # subprocess.run(["bash", "suicide.sh", "--force"], check=True)
+
+import requests
+
+BLACKLIST_API = "https://core.security.luova.club/api/blacklist?text=True"
+
+blocked_cache = set()
+
+def sync_blacklist():
+    global blocked_cache
+    try:
+        resp = requests.get(BLACKLIST_API, timeout=5)
+        resp.raise_for_status()
+
+        new_list = set(line.strip() for line in resp.text.splitlines() if line.strip())
+
+        # Find new IPs to block
+        to_block = new_list - blocked_cache
+
+        for ip in to_block:
+            logger.warning(f"Blocking IP {ip} from blacklist...")
+            subprocess.run([
+                "sudo", "iptables", "-A", "INPUT", "-s", ip, "-j",
+                "REJECT", "--reject-with", "icmp-port-unreachable"
+            ], check=False)
+        
+        blocked_cache = new_list
+
+    except Exception as e:
+        logger.warning(f"Failed to sync blacklist: {e}")
+
+
+# ----------------- Cleanup on exit -----------------
+def cleanup_on_exit(*args):
+    logger.warning("Cleanup triggered...")
+    if not RESTRICTED_ACCESS:
+        restore_baseline() # We shouldnt restore to baseline every time.
+
+# Register cleanup handlers
+atexit.register(cleanup_on_exit)
+signal.signal(signal.SIGTERM, cleanup_on_exit)
+signal.signal(signal.SIGINT, cleanup_on_exit)
+
+# ----------------- Fetch Alert Level -----------------
+async def fetch_alert_level(session):
+    try:
+        async with session.get(SECURE_API, timeout=5) as resp:
+            resp.raise_for_status()
+            return int((await resp.json()).get("alert_level", 0))
+    except Exception as e:
+        logger.warning(f"Failed to fetch alert level: {e}")
+        return None
 
 # ----------------- Main Loop -----------------
 async def monitor_loop():
     alert_level = 0
+
     async with aiohttp.ClientSession() as session:
         while True:
+            # --- FETCH ALERT LEVEL ---
             new_level = await fetch_alert_level(session)
             if new_level is not None:
                 alert_level = new_level
 
+            # --- HANDLE STATE ---
             if alert_level >= ALERT_LEVEL_SELF_DESTRUCT:
                 handle_self_destruct()
-                break  # Stop the loop if self-destruct triggered
+                break
+
             elif alert_level >= 4:
                 logger.warning(f"Cat detected! Alert level {alert_level}")
                 restrict_port_22()
-                await asyncio.sleep(CHECK_INTERVAL_CAT)
+                sleep_time = CHECK_INTERVAL_CAT
             else:
                 logger.info(f"No cat detected. Alert level {alert_level}")
                 allow_port_22()
-                await asyncio.sleep(CHECK_INTERVAL_NO_CAT)
+                sleep_time = CHECK_INTERVAL_NO_CAT
+
+            # --- SYNC BLACKLIST EVERY LOOP ---
+            sync_blacklist()
+
+            # --- SLEEP ---
+            await asyncio.sleep(sleep_time)
+
+
 
 # ----------------- Entrypoint -----------------
 if __name__ == "__main__":
