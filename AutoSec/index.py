@@ -12,33 +12,23 @@ Suggestions and feedback for improvement are welcome.
 
 import os
 import re
-from datetime import datetime
+import sys
+import time
 import logging
 import subprocess
-import threading
-
-
-from config import MAX_FAILED_PER_TYPE, ACTIONS_PER_THREAT_LEVEL_PER_TYPE as ACC_
-from tqdm import tqdm
-import time
-
-
+from datetime import datetime, timedelta
 from argparse import ArgumentParser
-from argcomplete import autocomplete
 
-import aiohttp
 import asyncio
-import hashlib
-
-logging.basicConfig(level=logging.INFO)
-
-from var import COMMANDS, PROCESSED_IPS, SERVER_IP, MODE, Mode
-from utils import load_welcome, run_in as load_in, run_car
-import sys
-
+import aiohttp
+from tqdm import tqdm
+from argcomplete import autocomplete
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
+from config import MAX_FAILED_PER_TYPE, ACTIONS_PER_THREAT_LEVEL_PER_TYPE as ACC_
+from var import COMMANDS, PROCESSED_IPS, SERVER_IP, MODE, Mode
+from utils import load_welcome, run_in as load_in, run_car
 from classes import (
     ThreatLevel,
     AuthLogAnalyzer,
@@ -48,55 +38,139 @@ from classes import (
     CentralServerAPI,
 )
 
+logging.basicConfig(level=logging.INFO)
+
 WELCOME = load_welcome()
 
 # Use the current Python interpreter (venv or system)
 python_executable = sys.executable
 
-subprocess.Popen([python_executable, "/etc/AutoSec/AutoSec/catguard.py"])
+CATGUARD_PATH = "/etc/AutoSec/AutoSec/catguard.py"
 
-class AuthLogHandler(FileSystemEventHandler):
-    def __init__(self, logfile):
-        super().__init__()
-        self.logfile = logfile
+def _start_catguard():
+    """Start the catguard helper script if it exists."""
+    if os.path.exists(CATGUARD_PATH):
+        try:
+            subprocess.Popen([python_executable, CATGUARD_PATH])
+            logging.debug("catguard.py started.")
+        except Exception as exc:  # pragma: no cover - best effort
+            logging.error("Failed to start catguard.py: %s", exc)
+    else:
+        logging.debug("catguard.py not found at %s, skipping.", CATGUARD_PATH)
 
-    def on_modified(self, event):
-        if event.src_path == self.logfile:
-            logging.info(f"{self.logfile} modified! Running analysis...")
-            main()  # call your main function
 
-def watch_logfile(logfile):
-    event_handler = AuthLogHandler(logfile)
-    observer = Observer()
-    observer.schedule(event_handler, path=os.path.dirname(logfile), recursive=False)
-    observer.start()
+LAST_RAN_FILE = "/etc/AutoSec/last_ran.txt"
+COMMANDS_FILE = "/etc/AutoSec/commands.sh"
+
+
+def _ensure_autosec_dir():
+    """Ensure that /etc/AutoSec exists."""
+    autosec_dir = os.path.dirname(COMMANDS_FILE)
+    if not os.path.isdir(autosec_dir):
+        try:
+            os.makedirs(autosec_dir, exist_ok=True)
+        except PermissionError:
+            logging.error(
+                "Cannot create %s. Please run this script with sufficient privileges.",
+                autosec_dir,
+            )
+
+
+def _load_last_ran():
+    """Return datetime of last run, or None if never run."""
+    if not os.path.exists(LAST_RAN_FILE):
+        return None
     try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        observer.stop()
-    observer.join()
+        with open(LAST_RAN_FILE, "r") as f:
+            return datetime.fromisoformat(f.read().strip())
+    except (ValueError, OSError):
+        return None
+
+
+def _update_last_ran():
+    """Update last ran timestamp to now."""
+    try:
+        with open(LAST_RAN_FILE, "w") as f:
+            f.write(datetime.now().isoformat())
+    except OSError as exc:
+        logging.error("Failed to update %s: %s", LAST_RAN_FILE, exc)
+
+
+def get_amount_of_threads(args):
+    """
+    Determines the number of threads to use for reporting events.
+    """
+    return args.threads if args.manual_threads else os.cpu_count() or 1
+
+
+def initialize_logging(args):
+    """
+    Configure logging and initialize central logging / environment.
+    """
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+    else:
+        # Default to INFO so the user sees something useful.
+        logging.getLogger().setLevel(logging.INFO)
+
+    _ensure_autosec_dir()
+
+    last_ran = _load_last_ran()
+    run_in_needed = False
+
+    # If auth.log is used and either never ran or ran over a week ago
+    if args.logfile == "/var/log/auth.log":
+        processed_path = "/etc/AutoSec/processed"
+        if not os.path.exists(processed_path):
+            run_in_needed = True
+        elif not last_ran or datetime.now() - last_ran > timedelta(days=7):
+            run_in_needed = True
+
+    # Only run run_in for auth.log, skip custom files
+    if run_in_needed:
+        logging.warning(
+            "Running the initial 'run_in' setup. This might take a while. Please do not CTRL+C."
+        )
+        load_in()
+        _update_last_ran()
+    elif args.logfile != "/var/log/auth.log":
+        logging.debug("Custom log file specified. Skipping run_in.")
+    else:
+        logging.debug("run_in has already been run recently. Skipping.")
+
+    # Ensure commands file exists with a header
+    if not os.path.exists(COMMANDS_FILE):
+        logging.debug("Creating commands.sh file at %s.", COMMANDS_FILE)
+        try:
+            with open(COMMANDS_FILE, "w") as file:
+                file.write("#!/bin/bash\n")
+                file.write("# AutoSec commands\n")
+                file.write("# This file contains the commands to execute based on the log analysis.\n")
+                file.write("# Do not edit this file manually.\n\n")
+        except OSError as exc:
+            logging.error("Failed to create %s: %s", COMMANDS_FILE, exc)
+
+    logging.info("Reporting to central monitoring system is enabled.")
+    logging_central = CentralServerAPI()
+
+    return logging_central
 
 
 async def report_events_async(events, logging_central, max_workers=10):
     """
     Reports events to the central monitoring system using asynchronous requests.
-
-    Parameters
-    ----------
-    events : list
-        List of events to report.
-    logging_central : CentralServerAPI
-        The central server API instance.
-    max_workers : int, optional
-        The maximum number of concurrent requests (default is 10).
-
-    Returns
-    -------
-    None
     """
+    if not events:
+        return
+
+    semaphore = asyncio.Semaphore(max_workers)
+
+    async def _bounded_report(event):
+        async with semaphore:
+            await logging_central.report_event(event, session)
+
     async with aiohttp.ClientSession() as session:
-        tasks = [logging_central.report_event(event, session) for event in events]
+        tasks = [_bounded_report(event) for event in events]
         for future in tqdm(
             asyncio.as_completed(tasks),
             total=len(tasks),
@@ -106,27 +180,64 @@ async def report_events_async(events, logging_central, max_workers=10):
             await future
 
 
-def main():
+def select_highest_action_from_threat(actions_per_type, highest_action, log_type):
     """
-    Main function to start the log analysis.
+    Given the current highest SuggestedAction and a log type, return the higher action.
     """
+    cfg = actions_per_type.get(log_type)
+    if not cfg:
+        # Unknown log type, keep the current action
+        return highest_action
 
-    #logging.warning("Banned ips by order from the central server.")
-    #logging.info("Read more at: https://core.security.luova.club/")
+    candidate = SuggestedAction(cfg["action"], cfg["duration"])
+    return candidate if candidate > highest_action else highest_action
 
-    args = init_args()  # Initialize command-line arguments
 
-    logging_central = initialize_logging(args)
+def write_commands_to_file(args):
+    """
+    Write all accumulated COMMANDS to the commands.sh file and optionally execute it.
+    """
+    if not COMMANDS:
+        logging.warning("No commands to write.")
+        return
 
+    logging.info("Writing %d commands to '%s'.", len(COMMANDS), COMMANDS_FILE)
+
+    try:
+        with open(COMMANDS_FILE, "w") as file:
+            for command in COMMANDS:
+                file.write(f"{command}\n")
+    except OSError as exc:
+        logging.error("Failed to write commands to %s: %s", COMMANDS_FILE, exc)
+        return
+
+    # NOTE: keep semantics as in original code:
+    #   --disable-autoexec flag *actually enabled* autoexec before.
+    #   To avoid surprising existing users, we keep the behaviour.
+    if not args.disable_autoexec:
+        logging.info("Executing commands from '%s' file.", COMMANDS_FILE)
+        try:
+            subprocess.run(["bash", COMMANDS_FILE], check=False)
+        except Exception as exc:  # pragma: no cover - best effort
+            logging.error("Failed to execute %s: %s", COMMANDS_FILE, exc)
+    else:
+        logging.info("Auto execution disabled; not running '%s'.", COMMANDS_FILE)
+
+
+def run_analysis(args, logging_central):
+    """
+    Run a single pass of the log analysis.
+    """
     logging.info("Starting log analysis")
     log_analyzer = AuthLogAnalyzer(args.logfile)
 
-    logging.info("Parsing log entries")
+    logging.info("Parsing log entries from %s", args.logfile)
     log_entries = log_analyzer.parse_log()
 
+    # In BLACK/DARKRED modes we report *all* events
     if MODE == Mode.BLACK or MODE == Mode.DARKRED:
         logging.info(
-            "Running in black mode. Reporting all events to central monitoring system."
+            "Running in BLACK/DARKRED mode. Reporting all events to central monitoring system."
         )
         asyncio.run(
             report_events_async(
@@ -135,20 +246,22 @@ def main():
         )
         logging.debug("All events reported to central monitoring system.")
 
+    # LCITSWG regulation: all logs must be relayed to the server, but we still
+    # keep explicit threat level selection in case classes use it.
     selected_threat_levels = [
         ThreatLevel.HIGH,
         ThreatLevel.MEDIUM,
         ThreatLevel.LOW,
-        ThreatLevel.UNKNOWN
-    ] # New LCITSWG regulation needs all logs relayed to the selver.
+        ThreatLevel.UNKNOWN,
+    ]
 
-    logging.debug(f"Selected threat levels: {selected_threat_levels}")
+    logging.debug("Selected threat levels: %s", selected_threat_levels)
 
     filtered_entries = log_analyzer.filter_by_threat_levels(
         log_entries, selected_threat_levels
     )
 
-    logging.debug("Done filtering log entries.")
+    logging.debug("Done filtering log entries (%d entries).", len(filtered_entries))
 
     logging.info("Reporting filtered events to central monitoring system.")
     asyncio.run(
@@ -160,164 +273,80 @@ def main():
 
     logging.debug("Counting requests per IP")
     per_ip_counter = PerIpCounter(filtered_entries)
-
-    logging.debug("Done counting requests per IP.")
+    ip_stats = per_ip_counter.count_requests_per_ip()
+    logging.debug("Done counting requests per IP (%d IPs).", len(ip_stats))
 
     MAX_FAILS = MAX_FAILED_PER_TYPE[str(MODE)]
     ACTIONS_PER_THREAT_LEVEL_PER_TYPE = ACC_[str(MODE)]
 
-    ii = per_ip_counter.count_requests_per_ip()
-    for item, value in ii.items():
-        if item in PROCESSED_IPS:
+    for ip, value in ip_stats.items():
+        if ip in PROCESSED_IPS:
             continue
 
-        highest_saction = SuggestedAction(SuggestedAction.NO_ACTION)
+        highest_action = SuggestedAction(SuggestedAction.NO_ACTION)
 
-        for item1, value1 in value["log_types"].items():
-            if value1 > MAX_FAILS[item1]:
-                highest_saction = select_highest_action_from_threat(
-                    ACTIONS_PER_THREAT_LEVEL_PER_TYPE, highest_saction, item1
+        for log_type, count in value.get("log_types", {}).items():
+            # Only consider this log type if it has exceeded threshold
+            threshold = MAX_FAILS.get(log_type)
+            if threshold is None:
+                logging.debug("Log type %s not in MAX_FAILS, skipping.", log_type)
+                continue
+
+            if count > threshold:
+                highest_action = select_highest_action_from_threat(
+                    ACTIONS_PER_THREAT_LEVEL_PER_TYPE, highest_action, log_type
                 )
 
-        COMMANDS.append(highest_saction.build_command(item))
-        PROCESSED_IPS.append(item)
+        COMMANDS.append(highest_action.build_command(ip))
+        PROCESSED_IPS.append(ip)
 
-        write_commands_to_file(args)
-
-    else:
-        logging.warning("No commands to write.")
-        logging.debug("If you want to save an empty file, use the --empty-save flag.")
+    # After processing all IPs, write and maybe execute the commands
+    write_commands_to_file(args)
 
     logging.info("Finished log analysis.")
 
 
-def main_loop():
+class AuthLogHandler(FileSystemEventHandler):
+    def __init__(self, logfile, args, logging_central):
+        super().__init__()
+        self.logfile = os.path.abspath(logfile)
+        self.args = args
+        self.logging_central = logging_central
+
+    def on_modified(self, event):
+        if os.path.abspath(event.src_path) == self.logfile:
+            logging.info("%s modified! Running analysis...", self.logfile)
+            run_analysis(self.args, self.logging_central)
+
+
+def watch_logfile(logfile, args, logging_central):
+    """
+    Watch a logfile and rerun analysis whenever it changes.
+    """
+    event_handler = AuthLogHandler(logfile, args, logging_central)
+    observer = Observer()
+    observer.schedule(
+        event_handler,
+        path=os.path.dirname(os.path.abspath(logfile)),
+        recursive=False,
+    )
+    observer.start()
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        logging.info("Stopping watchdog due to keyboard interrupt.")
+        observer.stop()
+    observer.join()
+
+
+def main_loop(args, logging_central):
     """
     Main loop to run the log analysis every 5 minutes.
     """
     while True:
-        main()
-        time.sleep(300) # we want closer to real time stuff
-
-
-def write_commands_to_file(args):
-    if len(COMMANDS) == 0:
-        logging.warning("No commands to write.")
-        return
-
-    logging.info(f"Writing {len(COMMANDS)} commands to 'commands.sh' file.")
-
-    with open("commands.sh", "w") as file:
-        for command in COMMANDS:
-            file.write(f"{command}\n")
-
-    if not args.disable_autoexec:
-        logging.info("Executing commands from 'commands.sh' file.")
-        subprocess.run(["bash", "commands.sh"])
-
-
-def select_highest_action_from_threat(
-    ACTIONS_PER_THREAT_LEVEL_PER_TYPE, highest_saction, item1
-):
-    saction = SuggestedAction(
-        ACTIONS_PER_THREAT_LEVEL_PER_TYPE[item1]["action"],
-        ACTIONS_PER_THREAT_LEVEL_PER_TYPE[item1]["duration"],
-    )
-
-    select_highest_action(highest_saction, saction)
-
-    highest_saction = saction if saction > highest_saction else highest_saction
-
-    return highest_saction
-
-
-def select_highest_action(highest_saction, saction):
-    if (
-        saction._action == highest_saction._action
-    ):  # if the action is the same, choose the one with the highest duration
-        if (
-            saction._duration > highest_saction._duration
-        ):  # if the duration is higher, choose the new action
-            highest_saction = saction
-import os
-import logging
-from datetime import datetime, timedelta
-
-LAST_RAN_FILE = "/etc/AutoSec/last_ran.txt"
-
-def _load_last_ran():
-    """Return datetime of last run, or None if never run."""
-    if not os.path.exists(LAST_RAN_FILE):
-        return None
-    with open(LAST_RAN_FILE, "r") as f:
-        try:
-            return datetime.fromisoformat(f.read().strip())
-        except ValueError:
-            return None
-
-def _update_last_ran():
-    """Update last ran timestamp to now."""
-    with open(LAST_RAN_FILE, "w") as f:
-        f.write(datetime.now().isoformat())
-
-def initialize_logging(args):
-    if args.verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
-        
-    else:
-        logging.getLogger().setLevel(logging.WARNING)
-        
-    last_ran = _load_last_ran()
-    run_in_needed = False
-
-    # If auth.log is used and either never ran or ran over a week ago
-    if args.logfile == "/var/log/auth.log":
-        if not os.path.exists("/etc/AutoSec/processed"):
-            run_in_needed = True
-        elif not last_ran or datetime.now() - last_ran > timedelta(days=7):
-            run_in_needed = True
-
-    # Only run in for auth.log, skip custom files
-    if run_in_needed:
-        logging.warning(
-            "Running the run in. This might take a while. Please do not CTRL+C."
-        )
-        load_in()
-        _update_last_ran()
-    elif args.logfile != "/var/log/auth.log":
-        logging.debug("Custom log file specified. Skipping run in.")
-    else:
-        logging.debug("Run in has already been run recently. Skipping.")
-
-    if not os.path.exists("/etc/AutoSec/commands.sh"):
-        logging.debug("Creating commands.sh file.")
-        with open("/etc/AutoSec/commands.sh", "w") as file:
-            file.write("#!/bin/bash\n")
-            file.write("# AutoSec commands\n")
-            file.write("# This file contains the commands to execute based on the log analysis.\n")
-            file.write("# Do not edit this file manually.\n\n")
-
-    logging.info("Reporting to central monitoring system is enabled.")
-    logging_central = CentralServerAPI()
-
-    return logging_central
-
-
-def get_amount_of_threads(args):
-    """
-    Determines the number of threads to use for reporting events.
-
-    Parameters
-    ----------
-    args : argparse.Namespace
-        The command-line arguments.
-
-    Returns
-    -------
-    int
-        The number of threads to use.
-    """
-    return args.threads if args.manual_threads else os.cpu_count()
+        run_analysis(args, logging_central)
+        time.sleep(300)  # we want closer to real time stuff
 
 
 def init_args():
@@ -367,21 +396,22 @@ def init_args():
 
 
 if __name__ == "__main__":
+    _start_catguard()
     args = init_args()
+    logging_central = initialize_logging(args)
 
     if args.single_run:
         logging.warning("Running in single run mode. This will not start the watchdog.")
-        main()
+        run_analysis(args, logging_central)
 
     elif MODE == 0 or MODE == Mode.PINK:
         logging.info("Running in manual mode. Running main function every 5 minutes.")
-        main_loop()
+        main_loop(args, logging_central)
 
     else:
         logging.info(
             "Running in watch mode. Running main function once and starting the watchdog."
         )
-        main()
-        logging.info("Main function ran once. Starting the watchdog.")
-        initialize_logging(args)
-        watch_logfile(args.logfile)
+        run_analysis(args, logging_central)
+        logging.info("Initial analysis complete. Starting the watchdog.")
+        watch_logfile(args.logfile, args, logging_central)
