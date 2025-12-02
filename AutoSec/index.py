@@ -46,6 +46,7 @@ WELCOME = load_welcome()
 python_executable = sys.executable
 
 CATGUARD_PATH = "/etc/AutoSec/AutoSec/catguard.py"
+AUTO_RUNIN = False
 
 def _start_catguard():
     """Start the catguard helper script if it exists."""
@@ -127,7 +128,7 @@ def initialize_logging(args):
             run_in_needed = True
 
     # Only run run_in for auth.log, skip custom files
-    if run_in_needed:
+    if run_in_needed and AUTO_RUNIN:
         logging.warning(
             "Running the initial 'run_in' setup. This might take a while. Please do not CTRL+C."
         )
