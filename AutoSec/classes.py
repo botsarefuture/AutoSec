@@ -9,9 +9,45 @@ from var import HASH_FILE, SERVER_IP
 
 from utils import save_processed_hashes, load_processed_hashes, VERSION
 
-PROCESSED_LINES = load_processed_hashes()
+#PROCESSED_LINES = load_processed_hashes()
 
 from dateutil.parser import parse as dt_parse
+from collections import deque
+
+MAX_HASHES = 100_000  # or whatever feels reasonable
+PROCESSED_LINES = deque(load_processed_hashes(), maxlen=MAX_HASHES)
+
+
+OFFSET_DIR = "/etc/AutoSec/offsets"
+
+def _ensure_offset_dir():
+    try:
+        os.makedirs(OFFSET_DIR, exist_ok=True)
+    except PermissionError:
+        logging.error("Cannot create %s; please run with sufficient privileges.", OFFSET_DIR)
+
+def _offset_file_for_log(log_file: str) -> str:
+    # One offset file per log path, deterministic name
+    name = hashlib.sha256(log_file.encode()).hexdigest()[:16]
+    return os.path.join(OFFSET_DIR, f"offset_{name}.txt")
+
+def _load_offset(log_file: str) -> int:
+    path = _offset_file_for_log(log_file)
+    if not os.path.exists(path):
+        return 0
+    try:
+        with open(path, "r") as f:
+            return int(f.read().strip() or 0)
+    except (ValueError, OSError):
+        return 0
+
+def _save_offset(log_file: str, offset: int) -> None:
+    path = _offset_file_for_log(log_file)
+    try:
+        with open(path, "w") as f:
+            f.write(str(offset))
+    except OSError as exc:
+        logging.error("Failed to save offset for %s: %s", log_file, exc)
 
 class ThreatLevel:
     """
@@ -159,7 +195,9 @@ class AuthLogAnalyzer:
             Path to the log file to be analyzed.
         """
         self._log_file = log_file
-        self._last_position = 0
+        _ensure_offset_dir()
+        # Load persisted file offset
+        self._last_position = _load_offset(log_file)
 
     def _identify_log_type(self, message):
         """
@@ -192,35 +230,51 @@ class AuthLogAnalyzer:
             The hash of the line.
         """
         return hashlib.sha256(line.encode()).hexdigest()
-
+    
+    
     def parse_log(self):
         """
-        Parses the log file and returns a list of log entries.
+        Parses the log file and returns a list of log entries
+        for *new* lines only (since last run).
 
-        Returns
-        -------
-        list of dict
-            A list of dictionaries where each dictionary represents a log entry.
+        Uses a persisted byte offset so we don't reread the entire file,
+        and relies on PROCESSED_LINES (a bounded deque of line hashes)
+        to avoid reprocessing duplicate lines across runs / rotations.
         """
         log_entries = []
         logging.info(f"Opening log file: {self._log_file}")
-        with open(self._log_file, "r") as file:
-            file.seek(self._last_position)
-            for line in file:
-                log_entry = self._parse_line(line)
-                if log_entry:
-                    log_entries.append(log_entry)
-                    logging.debug(f"Parsed log entry: {log_entry}")
 
-                    # Save the hash of the processed line
-                    line_hash = self._hash_line(line)
-                    PROCESSED_LINES.append(line_hash)
+        try:
+            with open(self._log_file, "r") as file:
+                # Seek to last known offset (may be 0 on first run)
+                file.seek(self._last_position)
 
-            self._last_position = file.tell()
+                for line in file:
+                    log_entry = self._parse_line(line)
+                    if log_entry:
+                        log_entries.append(log_entry)
+                        logging.debug(f"Parsed log entry: {log_entry}")
+
+                # Update offset to current end position
+                self._last_position = file.tell()
+
+        except FileNotFoundError:
+            logging.error("Log file %s not found.", self._log_file)
+            return []
+        except PermissionError:
+            logging.error("Permission denied when opening %s.", self._log_file)
+            return []
+
+        # Persist the new offset to disk so next run only sees new bytes
+        _save_offset(self._log_file, self._last_position)
+
+        # Persist the sliding window of processed line hashes
+        # PROCESSED_LINES is a deque(maxlen=MAX_HASHES)
+        save_processed_hashes(list(PROCESSED_LINES))
 
         logging.info(f"Finished parsing log file: {self._log_file}")
-        save_processed_hashes(PROCESSED_LINES)
         return log_entries
+
 
     def _parse_line(self, line):
         """
@@ -233,17 +287,23 @@ class AuthLogAnalyzer:
 
         Returns
         -------
-        dict or None
-            A dictionary representing the log entry, or None if the line could not be parsed.
+        LogEntry or None
+            A LogEntry instance, or None if the line could not be parsed
+            or has already been processed.
         """
+        # Compute hash once and use it both for dedup + storing
         line_hash = self._hash_line(line)
+
+        # Skip lines we've seen recently (bounded by MAX_HASHES via deque)
         if line_hash in PROCESSED_LINES:
             logging.debug(f"Line already processed: {line.strip()}")
             return None
 
         patterns = [
-            r"(?P<date>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+\+\d{2}:\d{2}) (?P<host>\S+) (?P<service>\S+)(?:\[\d+\])?: (?P<message>.+)",
-            r"(?P<date>\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}) (?P<host>\S+) (?P<service>\S+)(?:\[\d+\])?: (?P<message>.+)",
+            r"(?P<date>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+\+\d{2}:\d{2}) "
+            r"(?P<host>\S+) (?P<service>\S+)(?:\[\d+\])?: (?P<message>.+)",
+            r"(?P<date>\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}) "
+            r"(?P<host>\S+) (?P<service>\S+)(?:\[\d+\])?: (?P<message>.+)",
         ]
 
         for pattern in patterns:
@@ -251,16 +311,23 @@ class AuthLogAnalyzer:
             if match:
                 date_str = match.group("date")
                 try:
-                   date = dt_parse(date_str)
+                    date = dt_parse(date_str)
                 except ValueError as e:
-                    logging.warning(f"Failed to parse date: {date_str} with error: {e}")
+                    logging.warning(
+                        f"Failed to parse date: {date_str} with error: {e}"
+                    )
                     continue
 
                 message = match.group("message")
                 ip_pattern = r"(\d{1,3}\.){3}\d{1,3}"
                 ip_match = re.search(ip_pattern, message)
                 ip_address = ip_match.group(0) if ip_match else None
+
                 logging.debug(f"Matched log entry: {match.groupdict()}")
+
+                # Only now do we mark this line as processed
+                PROCESSED_LINES.append(line_hash)
+
                 return LogEntry(
                     date,
                     match.group("host"),
@@ -268,9 +335,10 @@ class AuthLogAnalyzer:
                     message,
                     ip_address,
                 )
-                
+
         logging.warning(f"Failed to parse line: {line.strip()}")
         return None
+
 
     def filter_high_medium_threats(self, log_entries):
         """
