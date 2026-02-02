@@ -11,7 +11,9 @@ import aiohttp
 import logging
 import time
 import subprocess
+import json
 from datetime import datetime
+from collections import deque
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import threading
@@ -33,6 +35,10 @@ logging.basicConfig(level=logging.INFO)
 LOGFILE = "/var/log/auth.log"
 COMMANDS_FILE = "/etc/AutoSec/commands.sh"
 CATGUARD = "/etc/AutoSec/AutoSec/catguard.py"
+FAILED_EVENTS_FILE = "/etc/AutoSec/failed_events.jsonl"
+MAX_FAILED_EVENTS = 5000
+REPORT_INTERVAL = 1.2
+MAX_BATCH = 100
 
 #############################################
 #  LAUNCH CATGUARD SAFELY (ONCE)
@@ -87,28 +93,86 @@ class LogEvent(FileSystemEventHandler):
 #############################################
 
 class BatchReporter:
-    def __init__(self, central, interval=1.0):
+    def __init__(self, central, loop, interval=REPORT_INTERVAL, max_batch=MAX_BATCH):
         self.central = central
-        self.pending = []
+        self.loop = loop
         self.interval = interval
-        self._task = None  # don't start yet
+        self.max_batch = max_batch
+        self.queue = asyncio.Queue()
+        self._failed = deque(maxlen=MAX_FAILED_EVENTS)
+        self._worker_future = asyncio.run_coroutine_threadsafe(self._worker(), self.loop)
 
     def add(self, evt):
-        self.pending.append(evt)
-        # ensure async worker is running
-        if self._task is None:
-            loop = asyncio.get_event_loop()
-            self._task = loop.create_task(self._worker())
+        try:
+            asyncio.run_coroutine_threadsafe(self.queue.put(self._serialize_event(evt)), self.loop)
+        except RuntimeError as exc:
+            logging.error("Reporter loop not running: %s", exc)
 
     async def _worker(self):
         async with aiohttp.ClientSession() as session:
+            await self._load_failed()
             while True:
-                if self.pending:
-                    batch = self.pending[:]
-                    self.pending.clear()
-                    tasks = [self.central.report_event(e, session) for e in batch]
-                    await asyncio.gather(*tasks, return_exceptions=True)
+                batch = []
+                try:
+                    evt = await asyncio.wait_for(self.queue.get(), timeout=self.interval)
+                    batch.append(evt)
+                except asyncio.TimeoutError:
+                    pass
+
+                while len(batch) < self.max_batch:
+                    try:
+                        batch.append(self.queue.get_nowait())
+                    except asyncio.QueueEmpty:
+                        break
+
+                while self._failed and len(batch) < self.max_batch:
+                    batch.append(self._failed.popleft())
+
+                if batch:
+                    results = await asyncio.gather(
+                        *[self.central.report_event(e, session) for e in batch],
+                        return_exceptions=True
+                    )
+                    if any(isinstance(r, Exception) or r is None for r in results):
+                        for evt, res in zip(batch, results):
+                            if isinstance(res, Exception) or res is None:
+                                self._failed.append(evt)
+                        await self._persist_failed()
                 await asyncio.sleep(self.interval)
+
+    async def _load_failed(self):
+        if not os.path.exists(FAILED_EVENTS_FILE):
+            return
+        try:
+            with open(FAILED_EVENTS_FILE, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        self._failed.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        continue
+        except OSError as exc:
+            logging.warning("Failed to load failed events: %s", exc)
+
+    async def _persist_failed(self):
+        if not self._failed:
+            return
+        try:
+            os.makedirs(os.path.dirname(FAILED_EVENTS_FILE), exist_ok=True)
+            with open(FAILED_EVENTS_FILE, "w") as f:
+                for evt in list(self._failed)[-MAX_FAILED_EVENTS:]:
+                    f.write(json.dumps(evt, ensure_ascii=True) + "\n")
+        except OSError as exc:
+            logging.warning("Failed to persist failed events: %s", exc)
+
+    def _serialize_event(self, evt):
+        if hasattr(evt, "to_dict"):
+            return evt.to_dict()
+        if isinstance(evt, dict):
+            return evt
+        return {"raw": str(evt)}
 
 
 #############################################
@@ -117,7 +181,8 @@ class BatchReporter:
 
 log_reader = IncrementalAuthLog(LOGFILE)
 central = CentralServerAPI()
-reporter = BatchReporter(central)
+reporter = None
+_last_change = 0.0
 
 def analyze_lines(lines):
     """Process ONLY the new log lines & generate actions."""
@@ -135,7 +200,8 @@ def analyze_lines(lines):
 
     # report all events
     for e in entries:
-        reporter.add(e)
+        if reporter:
+            reporter.add(e)
 
     # filter levels
     selected = [
@@ -204,6 +270,11 @@ def start_watcher():
     return observer
 
 def on_log_changed():
+    global _last_change
+    now = time.time()
+    if now - _last_change < 0.4:
+        return
+    _last_change = now
     new = log_reader.get_new_lines()
     analyze_lines(new)
 
@@ -211,13 +282,16 @@ def start_async_loop():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     threading.Thread(target=loop.run_forever, daemon=True).start()
+    return loop
 
 #############################################
 #  ENTRY
 #############################################
 
 def run():
-    start_async_loop()  # <-- NEW
+    global reporter
+    loop = start_async_loop()
+    reporter = BatchReporter(central, loop)
     start_catguard_once()
     # process existing tail once
     on_log_changed()

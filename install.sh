@@ -59,7 +59,7 @@ After=network.target
 Type=simple
 User=$USER
 WorkingDirectory=$INSTALL_DIR
-ExecStart=$INSTALL_DIR/venv/bin/python $INSTALL_DIR/AutoSec/index.py
+ExecStart=$INSTALL_DIR/venv/bin/python $INSTALL_DIR/AutoSec/index_v2.py
 Restart=on-failure
 
 [Install]
@@ -98,6 +98,7 @@ else
     install_dependencies
     setup_python_env
     sudo systemctl restart autosec.service
+    sudo systemctl daemon-reload
 fi
 
 # Ensure the install directory exists
