@@ -190,7 +190,7 @@ def analyze_lines(lines):
         return
 
     # incrementally feed lines into analyzer
-    analyzer = AuthLogAnalyzer(None)
+    analyzer = AuthLogAnalyzer(LOGFILE)
     entries = []
     for line in lines:
         evt = analyzer._parse_line(line)
