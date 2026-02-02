@@ -93,6 +93,10 @@ if [ ! -d "$INSTALL_DIR/.git" ]; then
     setup_systemd_service
 else
     echo "Updating the repository in $INSTALL_DIR..."
+    if ! sudo git -C "$INSTALL_DIR" diff-index --quiet HEAD --; then
+        echo "Local changes detected, resetting to HEAD..."
+        sudo git -C "$INSTALL_DIR" reset --hard
+    fi
     sudo git -C "$INSTALL_DIR" pull
     sudo chown -R $USER:$USER $INSTALL_DIR
     install_dependencies
