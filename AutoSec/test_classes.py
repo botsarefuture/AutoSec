@@ -91,7 +91,7 @@ class TestBanAction(unittest.TestCase):
     def test_build_command(self):
         ban_action = BanAction("192.168.1.1", 10)
         self.assertIn(
-            "iptables -A INPUT -s 192.168.1.1 -j DROP", ban_action.build_command()
+            "sudo iptables -A INPUT -s 192.168.1.1 -j DROP", ban_action.build_command()
         )
 
 
@@ -99,7 +99,7 @@ class TestSuggestedAction(unittest.TestCase):
     def test_build_command(self):
         action = SuggestedAction("ban", 10)
         self.assertIn(
-            "iptables -A INPUT -s 192.168.1.1 -j DROP",
+            "sudo iptables -A INPUT -s 192.168.1.1 -j DROP",
             action.build_command("192.168.1.1"),
         )
 

@@ -475,11 +475,11 @@ class BanAction:
         """
         if self._duration > 0:
             return (
-                f"iptables -A INPUT -s {self._ip_address} -j DROP && "
-                f"echo 'iptables -D INPUT -s {self._ip_address} -j DROP' | at now + {self._duration} minute"
+                f"sudo iptables -A INPUT -s {self._ip_address} -j DROP && "
+                f"echo 'sudo iptables -D INPUT -s {self._ip_address} -j DROP' | at now + {self._duration} minute"
             )
         else:
-            return f"iptables -A INPUT -s {self._ip_address} -j DROP"
+            return f"sudo iptables -A INPUT -s {self._ip_address} -j DROP"
 
 
 class SuggestedAction:
@@ -556,7 +556,7 @@ class SuggestedAction:
             return f"echo 'Alert: Suspicious activity from {ip_address}'"
 
         elif self._action == SuggestedAction.LOG:
-            return f"iptables -A INPUT -s {ip_address} -j LOG --log-prefix 'Suspicious activity: '"
+            return f"sudo iptables -A INPUT -s {ip_address} -j LOG --log-prefix 'Suspicious activity: '"
 
         else:
             return "echo 'No action required'"
